@@ -1,90 +1,125 @@
+#!/usr/bin/env node
+import { Command } from 'commander';
+import inquirer from 'inquirer';
 import axios from 'axios';
+import chalk from 'chalk';
+import readline from 'readline';
 import { io } from 'socket.io-client';
 
+const program = new Command();
 const API_URL = 'http://localhost:5000/api';
 const SOCKET_URL = 'http://localhost:5000';
 
-// HTTP API functions
-async function createRoom(name) {
-  try {
-    const res = await axios.post(`${API_URL}/rooms`, { name });
-    console.log('Room created:', res.data);
-    return res.data;
-  } catch (err) {
-    console.error('Create room error:', err.response?.data || err.message);
-  }
-}
+let socket;
+let currentRoom;
+let username;
 
-// Socket.IO functions
-function connectSocket() {
-  const socket = io(SOCKET_URL);
-  
-  socket.on('connect', () => {
-    console.log('Connected to server');
-  });
-  
-  socket.on('room_joined', (data) => {
-    console.log('Successfully joined room:', data);
-  });
-  
-  socket.on('user_joined', (data) => {
-    console.log(`${data.username} joined the room`);
-  });
-  
-  socket.on('user_left', (data) => {
-    console.log(`${data.username} left the room`);
-  });
-  
-  socket.on('receive_message', (data) => {
-    console.log(`[${data.roomName}] ${data.username}: ${data.content}`);
-  });
-  
-  socket.on('error', (data) => {
-    console.error('Socket error:', data.message);
-  });
-  
-  return socket;
-}
+// CLI setup
+program
+  .name('chat')
+  .description('CLI for real-time chat')
+  .version('1.0.0');
 
-function joinRoom(socket, roomName, username) {
-  socket.emit('join_room', { roomName, username });
-}
+// Create room command (HTTP)
+program
+  .command('create <room>')
+  .description('Create a new chat room')
+  .action(async (room) => {
+    try {
+      const res = await axios.post(`${API_URL}/rooms`, { name: room });
+      console.log(chalk.green(`✔ Room created:`), res.data.name);
+    } catch (err) {
+      console.error(chalk.red('✖ Failed to create room:'), err.response?.data || err.message);
+    }
+  });
 
-function sendMessage(socket, roomName, username, content) {
-  socket.emit('send_message', { roomName, username, content });
-}
+// Join room and start interactive chat (Socket.IO only)
+program
+  .command('join [room] [user]')
+  .description('Join an existing chat room')
+  .action(async (roomArg, userArg) => {
+    // Prompt for missing values
+    const answers = await inquirer.prompt([
+      {
+        type: 'input',
+        name: 'room',
+        message: 'Room name:',
+        when: () => !roomArg,
+      },
+      {
+        type: 'input',
+        name: 'username',
+        message: 'Your username:',
+        when: () => !userArg,
+      }
+    ]);
+    currentRoom = roomArg || answers.room;
+    username    = userArg   || answers.username;
 
-function leaveRoom(socket, roomName, username) {
-  socket.emit('leave_room', { roomName, username });
-}
+    // Connect to Socket.IO
+    socket = io(SOCKET_URL, { transports: ['websocket'] });
 
-// Example usage
-(async () => {
-  // 1. Create room via HTTP
-  await createRoom('general');
-  
-  // 2. Connect via Socket.IO
-  const socket = connectSocket();
-  
-  // Wait for connection
-  await new Promise(resolve => socket.on('connect', resolve));
-  
-  // 3. Join room via Socket.IO
-  joinRoom(socket, 'general', 'alice');
-  
-  // Wait a bit then send a message
-  setTimeout(() => {
-    sendMessage(socket, 'general', 'alice', 'Hello, world!');
-  }, 1000);
-  
-  // Wait a bit then leave the room
-  setTimeout(() => {
-    leaveRoom(socket, 'general', 'alice');
-  }, 3000);
-  
-  // Keep the process alive for a while to see the events
-  setTimeout(() => {
-    socket.disconnect();
-    process.exit(0);
-  }, 5000);
-})(); 
+    // Listen for events
+    socket.on('connect', () => {
+      console.log(chalk.blue('🟢 Connected to server'));
+      socket.emit('join_room', { roomName: currentRoom, username });
+    });
+
+    socket.on('room_joined', (data) => {
+      console.log(chalk.blue(`🟢 Joined room '${data.roomName}' as ${data.username}`));
+    });
+
+    socket.on('user_joined', (data) => {
+      console.log(chalk.cyan(`\n↪ ${data.username} joined`));
+      rl.prompt(true);
+    });
+
+    socket.on('user_left', (data) => {
+      console.log(chalk.cyan(`\n↪ ${data.username} left`));
+      rl.prompt(true);
+    });
+
+    socket.on('receive_message', (data) => {
+      if (data.username === username) return; // Don't echo own message
+      console.log(chalk.yellow(`\n[${data.roomName}] ${data.username}:`) + ' ' + data.content);
+      rl.prompt(true);
+    });
+
+    socket.on('error', (data) => {
+      console.error(chalk.red('Socket error:'), data.message);
+    });
+
+    socket.on('disconnect', () => {
+      console.log(chalk.red('\n⚠ Disconnected from server'));
+      process.exit(0);
+    });
+
+    // Interactive readline for chat
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout,
+      prompt: chalk.green(`${username}@${currentRoom}> `),
+    });
+
+    rl.prompt();
+    rl.on('line', (line) => {
+      const content = line.trim();
+      if (!content) { rl.prompt(); return; }
+      socket.emit('send_message', { roomName: currentRoom, username, content });
+      console.log(chalk.magenta(`[You]:`) + ' ' + content);
+      rl.prompt();
+    });
+
+    rl.on('SIGINT', () => {
+      socket.emit('leave_room', { roomName: currentRoom, username });
+      console.log(chalk.red('\n👋 Leaving chat...'));
+      process.exit(0);
+    });
+  });
+
+program.parse(process.argv);
+
+// Show help if no command
+if (!process.argv.slice(2).length) {
+  program.outputHelp();
+}
