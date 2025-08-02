@@ -96,12 +96,25 @@ node src/index.js
 
 **Terminal 2 - Kafka Consumer:**
 ```bash
+npm run consumer
+# or
 node src/kafka/consumer.js
 ```
 
-### 6. Test the Application
+### 6. Make your client script executable
+```bash
+chmod +x client.js
+```
+### 7. Link it globally (for development)
+```bash
+npm link
+```
+
+### 8. Test the Application
 ```bash
 # Run the test client
+npm run client
+# or
 node client.js
 ```
 
