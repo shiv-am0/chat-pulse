@@ -11,7 +11,7 @@
     "consumer": "node src/kafka/consumer.js"
   },
   "bin": {
-    "chat": "./client.js"
+    "chat-pulse": "./client.js"
   },
   "dependencies": {
     "axios": "^1.11.0",
