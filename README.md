@@ -1,4 +1,4 @@
-# Real-Time Chat Application
+# Chat-Pulse: A Real-Time Chat App CLI
 
 A modern, scalable real-time chat application built with Node.js, featuring real-time messaging, event-driven architecture, and comprehensive monitoring.
 
