@@ -1,0 +1,371 @@
+# ChatPulse 💬
+
+A scalable real-time chat API built with Django, Redis, and Apache Kafka. Rooms are automatically deleted with all their messages when the creator leaves.
+
+---
+
+## 🏗️ Architecture
+┌─────────────────────────────────────────────────────────────────┐
+│                         API Client                              │
+│                  (Postman / curl / Frontend)                    │
+└────────────────────────┬────────────────────────────────────────┘
+│ HTTP + JWT
+▼
+┌─────────────────────────────────────────────────────────────────┐
+│                     Django + DRF                                │
+│                                                                 │
+│   Auth APIs        Room APIs         Message APIs              │
+│   /api/auth/       /api/rooms/       /api/messages/            │
+└────────┬───────────────────────────────────┬────────────────────┘
+│                                   │
+▼                                   ▼
+┌─────────────────┐                 ┌─────────────────┐
+│   PostgreSQL    │                 │      Kafka      │
+│                 │                 │                 │
+│  • Users        │                 │  chat-messages  │
+│  • Rooms        │                 │  topic          │
+│  • Memberships  │                 └────────┬────────┘
+│  • Messages     │                          │
+└─────────────────┘                          ▼
+▲                          ┌─────────────────┐
+│                         │  Kafka Consumer │
+│    persist              │  (mgmt command) │
+└─────────────────────────┤                 │
+│  saves to DB    │
+│  publishes to   │
+│  Redis          │
+└────────┬────────┘
+│
+▼
+┌─────────────────┐
+│      Redis      │
+│                 │
+│  • Pub/Sub      │
+│  • Membership   │
+│    cache        │
+│  • Room info    │
+│    cache        │
+└─────────────────┘
+
+---
+
+## 🛠️ Tech Stack
+
+| Technology | Version | Purpose |
+|---|---|---|
+| Python | 3.12 | Core language |
+| Django | 4.2 | Web framework |
+| Django REST Framework | 3.15 | REST API toolkit |
+| SimpleJWT | latest | JWT authentication |
+| PostgreSQL | 15 | Primary database |
+| Redis | latest | Caching + Pub/Sub |
+| Apache Kafka | 7.4.0 | Message streaming |
+| Zookeeper | 7.4.0 | Kafka coordinator |
+| Docker + Compose | latest | Infrastructure |
+
+---
+
+## ✨ Features
+
+- **JWT Authentication** — register, login, logout, token refresh
+- **Room Management** — create, list, join, leave rooms
+- **Auto-Delete** — room and all its messages are deleted when creator leaves
+- **Real-time Messaging** — messages flow through Kafka → PostgreSQL + Redis
+- **Redis Caching** — room membership and info cached for fast lookups
+- **Pub/Sub** — Redis channels for real-time message broadcasting
+- **Kafka Durability** — messages persisted in Kafka before DB write
+- **Idempotent Consumer** — duplicate message protection via `get_or_create`
+- **Cursor Pagination** — efficient message history with `before_id`
+- **Monitoring UIs** — pgAdmin, Kafka UI, RedisInsight included
+
+---
+
+## 📁 Project Structure
+chatpulse/
+│
+├── backend/
+│   ├── apps/
+│   │   ├── users/                  # Auth — register, login, JWT
+│   │   │   ├── models.py
+│   │   │   ├── serializers.py
+│   │   │   ├── views.py
+│   │   │   └── urls.py
+│   │   │
+│   │   ├── rooms/                  # Rooms — CRUD, membership, auto-delete
+│   │   │   ├── models.py
+│   │   │   ├── serializers.py
+│   │   │   ├── views.py
+│   │   │   ├── urls.py
+│   │   │   └── redis_service.py    # All Redis operations
+│   │   │
+│   │   └── messages/               # Messages — send via Kafka, fetch history
+│   │       ├── models.py
+│   │       ├── serializers.py
+│   │       ├── views.py
+│   │       ├── urls.py
+│   │       └── management/
+│   │           └── commands/
+│   │               └── run_kafka_consumer.py
+│   │
+│   ├── config/
+│   │   ├── settings/
+│   │   │   ├── base.py             # Shared settings
+│   │   │   ├── local.py            # Development overrides
+│   │   │   └── production.py       # Production overrides
+│   │   ├── urls.py                 # Root URL dispatcher
+│   │   ├── redis_client.py         # Redis connection pool
+│   │   └── kafka_producer.py       # Kafka producer singleton
+│   │
+│   ├── manage.py
+│   └── requirements.txt
+│
+├── docker-compose.yml
+├── .env
+├── .gitignore
+└── README.md
+
+---
+
+## 🚀 Getting Started
+
+### Prerequisites
+
+- Python 3.12+
+- Docker and Docker Compose
+- Git
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/chatpulse.git
+cd chatpulse
+```
+
+### 2. Create Virtual Environment
+
+```bash
+python -m venv .venv
+source .venv/bin/activate        # Mac/Linux
+# .venv\Scripts\activate         # Windows
+```
+
+### 3. Install Dependencies
+
+```bash
+pip install django djangorestframework djangorestframework-simplejwt \
+            psycopg2-binary redis confluent-kafka \
+            python-decouple django-cors-headers
+```
+
+### 4. Configure Environment Variables
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your values:
+
+```bash
+# Django
+SECRET_KEY=your-secret-key-here
+DEBUG=True
+
+# PostgreSQL
+DB_NAME=chatpulse
+DB_USER=admin
+DB_PASSWORD=password
+DB_HOST=localhost
+DB_PORT=5432
+
+# Redis
+REDIS_URL=redis://localhost:6379
+
+# Kafka
+KAFKA_BROKER=localhost:9092
+
+# JWT
+JWT_SECRET=your-jwt-secret-here
+```
+
+### 5. Start Infrastructure
+
+```bash
+docker-compose up -d
+
+# Verify all containers are healthy
+docker-compose ps
+```
+
+### 6. Run Migrations
+
+```bash
+cd backend
+python manage.py makemigrations users
+python manage.py makemigrations rooms
+python manage.py makemigrations chat_messages
+python manage.py migrate
+```
+
+### 7. Start the Application
+
+**Terminal 1 — Django server:**
+```bash
+cd backend
+python manage.py runserver
+```
+
+**Terminal 2 — Kafka consumer:**
+```bash
+cd backend
+python manage.py run_kafka_consumer
+```
+
+---
+
+## 🔌 API Reference
+
+### Authentication
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/auth/register/` | ❌ | Register a new user |
+| POST | `/api/auth/login/` | ❌ | Login and get tokens |
+| POST | `/api/auth/logout/` | ✅ | Logout and blacklist token |
+| POST | `/api/auth/token/refresh/` | ❌ | Refresh access token |
+| GET | `/api/auth/me/` | ✅ | Get current user profile |
+
+### Rooms
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| GET | `/api/rooms/` | ✅ | List all rooms |
+| POST | `/api/rooms/` | ✅ | Create a new room |
+| GET | `/api/rooms/<id>/` | ✅ | Room details + members |
+| POST | `/api/rooms/<id>/join/` | ✅ | Join a room |
+| POST | `/api/rooms/<id>/leave/` | ✅ | Leave a room (auto-deletes if creator) |
+
+### Messages
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| POST | `/api/messages/send/` | ✅ | Send a message (async via Kafka) |
+| GET | `/api/messages/?room_id=1` | ✅ | Get message history |
+| GET | `/api/messages/?room_id=1&limit=20` | ✅ | Get message history with limit |
+| GET | `/api/messages/?room_id=1&before_id=50` | ✅ | Cursor-based pagination |
+
+---
+
+## 📨 Message Flow
+Client sends POST /api/messages/send/
+│
+▼
+Django validates:
+• JWT token valid?
+• Room exists? (Redis cache → DB fallback)
+• User is member? (Redis cache → DB fallback)
+│
+▼
+Produce to Kafka topic "chat-messages"
+│
+▼
+Return 202 ACCEPTED immediately
+(client doesn't wait for DB write)
+│
+─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
+│  async boundary
+▼
+Kafka Consumer reads message
+│
+├──► Save to PostgreSQL (durable storage)
+│
+└──► Publish to Redis channel "room:{id}"
+│
+▼
+All subscribers receive
+message in real time
+
+---
+
+## 🗄️ Database Schema
+users
+├── id (PK)
+├── username (unique)
+├── email
+├── password (hashed)
+├── is_online
+└── created_at
+rooms
+├── id (PK)
+├── name (unique)
+├── creator_id (FK → users)
+└── created_at
+room_memberships
+├── id (PK)
+├── user_id (FK → users)
+├── room_id (FK → rooms)
+└── joined_at
+[unique_together: user_id + room_id]
+messages
+├── id (PK)
+├── room_id (FK → rooms, CASCADE)
+├── sender_id (FK → users, SET_NULL)
+├── content
+├── timestamp
+└── kafka_offset
+[index: room_id + timestamp]
+
+---
+
+## 📦 Redis Data Structure
+room:{id}:members   →  Set      {"1", "2", "3"}         Room membership
+room:{id}:info      →  Hash     {name, creator_id}       Room metadata cache
+room:{id}           →  Channel  Pub/Sub message channel
+
+---
+
+## 🐳 Docker Services
+
+| Service | Port | UI | Purpose |
+|---|---|---|---|
+| PostgreSQL | 5432 | — | Primary database |
+| Redis | 6379 | localhost:8001 | Cache + Pub/Sub |
+| Kafka | 9092 | localhost:8080 | Message broker |
+| Zookeeper | 2181 | — | Kafka coordinator |
+| pgAdmin | — | localhost:5050 | PostgreSQL UI |
+| Kafka UI | — | localhost:8080 | Kafka monitoring |
+| RedisInsight | — | localhost:8001 | Redis monitoring |
+
+---
+
+## 📊 Monitoring
+
+| Dashboard | URL | Credentials |
+|---|---|---|
+| pgAdmin | http://localhost:5050 | admin@chatpulse.com / password |
+| Kafka UI | http://localhost:8080 | — |
+| RedisInsight | http://localhost:8001 | — |
+
+---
+
+## 🔑 Key Design Decisions
+
+**Why Kafka instead of writing directly to DB?**
+Kafka decouples message ingestion from persistence. Django returns 202 immediately without waiting for DB writes. Messages are never lost even if PostgreSQL is temporarily unavailable.
+
+**Why Redis for membership instead of always querying PostgreSQL?**
+Membership checks happen on every message send. Redis Set lookups are O(1) and ~50x faster than PostgreSQL queries. At scale this protects the database from excessive load.
+
+**Why `on_delete=CASCADE` on Room → Message?**
+When the room creator leaves and the room is deleted, PostgreSQL automatically deletes all memberships and messages in a single atomic transaction. No manual cleanup code needed.
+
+**Why manual Kafka offset commit?**
+`enable.auto.commit=False` ensures the offset is only committed after the message is successfully saved to PostgreSQL. If the consumer crashes mid-processing, the message is re-processed on restart — no data loss.
+
+**Why `get_or_create` with `kafka_offset`?**
+If the consumer crashes after saving to DB but before committing the offset, it will re-process the message on restart. `get_or_create` using `kafka_offset` as the unique key prevents duplicate messages in the database.
+
+---
+
+## 📝 License
+
+MIT License — see [LICENSE](LICENSE) for details.
