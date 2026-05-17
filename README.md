@@ -5,20 +5,22 @@ A scalable real-time chat API built with Django, Redis, and Apache Kafka. Rooms 
 ---
 
 ## 🏗️ Architecture
+
+```text
 ┌─────────────────────────────────────────────────────────────────┐
 │                         API Client                              │
 │                  (Postman / curl / Frontend)                    │
 └────────────────────────┬────────────────────────────────────────┘
-│ HTTP + JWT
-▼
+                         │ HTTP + JWT
+                         ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Django + DRF                                │
 │                                                                 │
-│   Auth APIs        Room APIs         Message APIs              │
-│   /api/auth/       /api/rooms/       /api/messages/            │
+│   Auth APIs        Room APIs         Message APIs               │
+│   /api/auth/       /api/rooms/       /api/messages/             │
 └────────┬───────────────────────────────────┬────────────────────┘
-│                                   │
-▼                                   ▼
+         │                                   │
+         ▼                                   ▼
 ┌─────────────────┐                 ┌─────────────────┐
 │   PostgreSQL    │                 │      Kafka      │
 │                 │                 │                 │
@@ -27,25 +29,26 @@ A scalable real-time chat API built with Django, Redis, and Apache Kafka. Rooms 
 │  • Memberships  │                 └────────┬────────┘
 │  • Messages     │                          │
 └─────────────────┘                          ▼
-▲                          ┌─────────────────┐
-│                         │  Kafka Consumer │
-│    persist              │  (mgmt command) │
-└─────────────────────────┤                 │
-│  saves to DB    │
-│  publishes to   │
-│  Redis          │
-└────────┬────────┘
-│
-▼
-┌─────────────────┐
-│      Redis      │
-│                 │
-│  • Pub/Sub      │
-│  • Membership   │
-│    cache        │
-│  • Room info    │
-│    cache        │
-└─────────────────┘
+         ▲                          ┌─────────────────┐
+         │                          │ Kafka Consumer  │
+         │ persist                  │ (mgmt command)  │
+         └──────────────────────────┤                 │
+                                    │ saves to DB     │
+                                    │ publishes to    │
+                                    │ Redis           │
+                                    └────────┬────────┘
+                                             │
+                                             ▼
+                                    ┌─────────────────┐
+                                    │      Redis      │
+                                    │                 │
+                                    │  • Pub/Sub      │
+                                    │  • Membership   │
+                                    │    cache        │
+                                    │  • Room info    │
+                                    │    cache        │
+                                    └─────────────────┘
+```
 
 ---
 
@@ -81,6 +84,8 @@ A scalable real-time chat API built with Django, Redis, and Apache Kafka. Rooms 
 ---
 
 ## 📁 Project Structure
+
+```text
 chatpulse/
 │
 ├── backend/
@@ -123,6 +128,7 @@ chatpulse/
 ├── .env
 ├── .gitignore
 └── README.md
+```
 
 ---
 
@@ -209,12 +215,14 @@ python manage.py migrate
 ### 7. Start the Application
 
 **Terminal 1 — Django server:**
+
 ```bash
 cd backend
 python manage.py runserver
 ```
 
 **Terminal 2 — Kafka consumer:**
+
 ```bash
 cd backend
 python manage.py run_kafka_consumer
@@ -256,6 +264,8 @@ python manage.py run_kafka_consumer
 ---
 
 ## 📨 Message Flow
+
+```text
 Client sends POST /api/messages/send/
 │
 ▼
@@ -271,8 +281,8 @@ Produce to Kafka topic "chat-messages"
 Return 202 ACCEPTED immediately
 (client doesn't wait for DB write)
 │
-─ ─ ─ ─ ─ ┼ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─
-│  async boundary
+├───────────────────────────────────────────── async boundary
+│
 ▼
 Kafka Consumer reads message
 │
@@ -283,10 +293,13 @@ Kafka Consumer reads message
 ▼
 All subscribers receive
 message in real time
+```
 
 ---
 
 ## 🗄️ Database Schema
+
+```text
 users
 ├── id (PK)
 ├── username (unique)
@@ -294,17 +307,21 @@ users
 ├── password (hashed)
 ├── is_online
 └── created_at
+
 rooms
 ├── id (PK)
 ├── name (unique)
 ├── creator_id (FK → users)
 └── created_at
+
 room_memberships
 ├── id (PK)
 ├── user_id (FK → users)
 ├── room_id (FK → rooms)
 └── joined_at
+
 [unique_together: user_id + room_id]
+
 messages
 ├── id (PK)
 ├── room_id (FK → rooms, CASCADE)
@@ -312,14 +329,19 @@ messages
 ├── content
 ├── timestamp
 └── kafka_offset
+
 [index: room_id + timestamp]
+```
 
 ---
 
 ## 📦 Redis Data Structure
+
+```text
 room:{id}:members   →  Set      {"1", "2", "3"}         Room membership
-room:{id}:info      →  Hash     {name, creator_id}       Room metadata cache
+room:{id}:info      →  Hash     {name, creator_id}      Room metadata cache
 room:{id}           →  Channel  Pub/Sub message channel
+```
 
 ---
 
@@ -349,19 +371,24 @@ room:{id}           →  Channel  Pub/Sub message channel
 
 ## 🔑 Key Design Decisions
 
-**Why Kafka instead of writing directly to DB?**
-Kafka decouples message ingestion from persistence. Django returns 202 immediately without waiting for DB writes. Messages are never lost even if PostgreSQL is temporarily unavailable.
+### Why Kafka instead of writing directly to DB?
 
-**Why Redis for membership instead of always querying PostgreSQL?**
-Membership checks happen on every message send. Redis Set lookups are O(1) and ~50x faster than PostgreSQL queries. At scale this protects the database from excessive load.
+Kafka decouples message ingestion from persistence. Django returns `202 ACCEPTED` immediately without waiting for DB writes. Messages are never lost even if PostgreSQL is temporarily unavailable.
 
-**Why `on_delete=CASCADE` on Room → Message?**
+### Why Redis for membership instead of always querying PostgreSQL?
+
+Membership checks happen on every message send. Redis Set lookups are `O(1)` and significantly faster than PostgreSQL queries. At scale this protects the database from excessive load.
+
+### Why `on_delete=CASCADE` on Room → Message?
+
 When the room creator leaves and the room is deleted, PostgreSQL automatically deletes all memberships and messages in a single atomic transaction. No manual cleanup code needed.
 
-**Why manual Kafka offset commit?**
+### Why manual Kafka offset commit?
+
 `enable.auto.commit=False` ensures the offset is only committed after the message is successfully saved to PostgreSQL. If the consumer crashes mid-processing, the message is re-processed on restart — no data loss.
 
-**Why `get_or_create` with `kafka_offset`?**
+### Why `get_or_create` with `kafka_offset`?
+
 If the consumer crashes after saving to DB but before committing the offset, it will re-process the message on restart. `get_or_create` using `kafka_offset` as the unique key prevents duplicate messages in the database.
 
 ---
