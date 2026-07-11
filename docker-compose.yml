@@ -1,3 +1,5 @@
+name: chatpulse
+
 services:
 
   postgres:
@@ -90,6 +92,27 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     depends_on:
       - kafka
+    networks:
+      - chatpulse-network
+
+  api:
+    build:
+      context: ./backend
+    container_name: chatpulse-api
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DB_HOST: postgres
+      REDIS_URL: redis://redis:6379
+      KAFKA_BROKER: kafka:29092
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     networks:
       - chatpulse-network
 

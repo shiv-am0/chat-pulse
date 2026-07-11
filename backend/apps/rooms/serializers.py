@@ -14,9 +14,13 @@ class RoomSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
     def get_member_count(self, obj):
+        if hasattr(obj, '_member_count'):
+            return obj._member_count
         return obj.memberships.count()
 
     def get_is_member(self, obj):
+        if hasattr(obj, '_is_member'):
+            return obj._is_member
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False

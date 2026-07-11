@@ -1,13 +1,14 @@
-import datetime
+from datetime import datetime, timezone
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from django.conf import settings
 
 from apps.messages.models import Message
 from apps.messages.serializers import MessageSerializer, SendMessageSerializer
+from apps.rooms.models import RoomMembership
 from config.kafka_producer import produce_message
-from django.conf import settings
 
 
 class SendMessageView(APIView):
@@ -32,7 +33,7 @@ class SendMessageView(APIView):
             'sender_id': request.user.id,
             'sender_username': request.user.username,
             'content': content,
-            'timestamp': datetime.datetime.utcnow().isoformat(),
+            'timestamp': datetime.now(timezone.utc).isoformat(),
         }
 
         produce_message(
@@ -64,7 +65,6 @@ class RoomMessagesView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        from apps.rooms.models import RoomMembership
         if not RoomMembership.objects.filter(
             user=request.user,
             room_id=room_id

@@ -1,3 +1,4 @@
+import threading
 import httpx
 from .config import get_api_url
 from .token_storage import load_tokens, save_tokens, clear_tokens
@@ -13,6 +14,7 @@ class ChatPulseClient:
     def __init__(self):
         self.base_url = get_api_url().rstrip("/")
         self._client = httpx.Client(timeout=15)
+        self._lock = threading.Lock()
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._current_user: dict | None = None
@@ -53,14 +55,19 @@ class ChatPulseClient:
     def request(self, method: str, path: str, **kwargs) -> httpx.Response:
         url = f"{self.base_url}{path}"
         for attempt in range(2):
+            with self._lock:
+                headers = self._headers()
+                refresh_token = self._refresh_token
             try:
-                r = self._client.request(method, url, headers=self._headers(), **kwargs)
+                r = self._client.request(method, url, headers=headers, **kwargs)
             except httpx.TransportError as e:
                 raise ChatPulseError(str(e)) from e
-            if r.status_code != 401 or not self._refresh_token:
+            if r.status_code != 401 or not refresh_token:
                 return r
-            if attempt == 0 and self._try_refresh():
-                continue
+            if attempt == 0:
+                with self._lock:
+                    if self._try_refresh():
+                        continue
             break
         return r
 
@@ -90,10 +97,11 @@ class ChatPulseClient:
             json={"username": username, "password": password},
         )
         data = self._handle(r, 200)
-        self._access_token = data["access"]
-        self._refresh_token = data["refresh"]
-        self._current_user = data["user"]
-        save_tokens(self._access_token, self._refresh_token)
+        with self._lock:
+            self._access_token = data["access"]
+            self._refresh_token = data["refresh"]
+            self._current_user = data["user"]
+            save_tokens(self._access_token, self._refresh_token)
         return data
 
     def logout(self, refresh_token: str | None = None) -> dict:
@@ -102,10 +110,11 @@ class ChatPulseClient:
             r = self.post("/auth/logout/", json={"refresh": token})
         else:
             r = self.post("/auth/logout/", json={"refresh": ""})
-        clear_tokens()
-        self._access_token = None
-        self._refresh_token = None
-        self._current_user = None
+        with self._lock:
+            clear_tokens()
+            self._access_token = None
+            self._refresh_token = None
+            self._current_user = None
         return self._handle(r, 200)
 
     def me(self) -> dict:

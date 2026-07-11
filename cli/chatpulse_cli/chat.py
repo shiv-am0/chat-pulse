@@ -3,11 +3,14 @@ import queue
 import time
 import select
 import sys
+import logging
 from datetime import datetime
 from rich.text import Text
 from .client import get_client, ChatPulseError
 from .ui import console, print_error, print_info
 from .config import get_poll_interval
+
+logger = logging.getLogger(__name__)
 
 
 def fmt_msg(m: dict, user_id: int) -> str:
@@ -35,6 +38,8 @@ def run_chat(room_id: int):
     def poll_messages():
         nonlocal latest_id
         interval = get_poll_interval()
+        backoff = interval
+
         while not stop_event.is_set():
             try:
                 data = client.get_messages(room_id, limit=50)
@@ -42,11 +47,20 @@ def run_chat(room_id: int):
                     if latest_id is None or m["id"] > latest_id:
                         msg_queue.put(m)
                         latest_id = m["id"]
+                backoff = interval
+            except ChatPulseError:
+                logger.warning("Poll failed, backing off", exc_info=True)
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+                continue
             except Exception:
-                pass
+                logger.exception("Unexpected poll error")
+                time.sleep(backoff)
+                backoff = min(backoff * 2, 30)
+                continue
             time.sleep(interval)
 
-    poller = threading.Thread(target=poll_messages, daemon=True)
+    poller = threading.Thread(target=poll_messages, daemon=False)
     poller.start()
 
     # ── Helpers ──────────────────────────────────────────
@@ -68,8 +82,8 @@ def run_chat(room_id: int):
             msg_queue.put(m)
             if latest_id is None or m["id"] > latest_id:
                 latest_id = m["id"]
-    except Exception:
-        pass
+    except ChatPulseError:
+        logger.exception("Failed to pre-load messages")
 
     # ── Welcome ──────────────────────────────────────────
     print_info(f"Joined [bold]{room_name}[/bold] (room {room_id})")
@@ -122,4 +136,5 @@ def run_chat(room_id: int):
         pass
     finally:
         stop_event.set()
+        poller.join(timeout=5)
         print_info("Exited chat.")

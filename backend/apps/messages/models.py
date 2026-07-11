@@ -17,7 +17,7 @@ class Message(models.Model):
     )
     content = models.TextField()
     timestamp = models.DateTimeField(auto_now_add=True)
-    kafka_offset = models.BigIntegerField(null=True, blank=True)
+    kafka_offset = models.BigIntegerField(null=True, blank=True, unique=True)
 
     class Meta:
         db_table = 'messages'

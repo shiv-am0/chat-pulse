@@ -1,3 +1,4 @@
+from django.db.models import Count, Exists, OuterRef
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
@@ -16,7 +17,18 @@ class RoomListCreateView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        rooms = Room.objects.all().select_related('creator')
+        limit = int(request.query_params.get('limit', 200))
+        limit = min(limit, 500)
+
+        rooms = Room.objects.annotate(
+            _member_count=Count('memberships'),
+            _is_member=Exists(
+                RoomMembership.objects.filter(
+                    user=request.user,
+                    room=OuterRef('pk'),
+                )
+            ),
+        ).select_related('creator')[:limit]
         serializer = RoomSerializer(
             rooms,
             many=True,

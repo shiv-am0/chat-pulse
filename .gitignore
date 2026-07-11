@@ -1,5 +1,38 @@
-.venv/
+# Environment
 .env
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
 *.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Docker
+docker-data/
+
+# Backend
+backend/staticfiles/
+backend/media/
+
+# CLI
+cli/*.egg-info/
+cli/dist/
+cli/build/

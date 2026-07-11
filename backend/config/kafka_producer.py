@@ -1,6 +1,6 @@
 import json
 import logging
-from confluent_kafka import Producer
+from confluent_kafka import Producer, KafkaException
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 _producer_config = {
     'bootstrap.servers': settings.KAFKA_BROKER,
     'acks': 'all',
+    'enable.idempotence': True,
+    'max.in.flight.requests.per.connection': 5,
     'retries': 3,
     'retry.backoff.ms': 1000,
     'delivery.timeout.ms': 30000,
@@ -28,17 +30,31 @@ def produce_message(topic: str, key: str, value: dict) -> None:
 
     def delivery_callback(err, msg):
         if err:
-            logger.error(f"Delivery failed: {err}")
+            logger.error(f"Kafka delivery failed: {err}")
         else:
             logger.debug(
                 f"Delivered to {msg.topic()} "
                 f"[{msg.partition()}] @ {msg.offset()}"
             )
 
-    producer.produce(
-        topic=topic,
-        key=str(key),
-        value=json.dumps(value),
-        callback=delivery_callback,
-    )
+    try:
+        producer.produce(
+            topic=topic,
+            key=str(key),
+            value=json.dumps(value),
+            callback=delivery_callback,
+        )
+    except BufferError:
+        logger.error("Kafka producer queue full — flushing and retrying")
+        producer.poll(0)
+        try:
+            producer.produce(
+                topic=topic,
+                key=str(key),
+                value=json.dumps(value),
+                callback=delivery_callback,
+            )
+        except BufferError:
+            raise RuntimeError("Kafka producer queue full — giving up")
+
     producer.poll(0)

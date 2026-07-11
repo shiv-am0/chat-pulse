@@ -42,6 +42,6 @@ def members_panel(room: dict, members: list) -> Panel:
     text = Text()
     for m in members:
         user = m["user"]
-        tag = "  (you)" if room["room"]["creator"]["id"] == user["id"] else ""
+        tag = "  (you)" if room["creator"]["id"] == user["id"] else ""
         text.append(f"  \u2022 {user['username']}{tag}\n")
-    return Panel(text, title=f"[bold]{room['room']['name']}[/bold]", border_style="cyan")
+    return Panel(text, title=f"[bold]{room['name']}[/bold]", border_style="cyan")
