@@ -498,6 +498,75 @@ Each terminal window gets its own `~/.chatpulse/token-{tty_hash}` file based on 
 
 ---
 
+## Deployment
+
+### Architecture
+
+```
+User's Terminal                     Vercel (CDN)                   AWS EC2 (VPS)
+┌──────────────┐             ┌──────────────────┐         ┌──────────────────────────┐
+│  chatpulse   │────────────▶│  SPA Docs Site   │         │  Nginx (:80/443)         │
+│  CLI tool    │             │  chatpulse.online│         │       │                   │
+│              │             └──────────────────┘         │       ▼                   │
+│  pip install │                                          │  Gunicorn/Django :8000    │
+│  chatpulse   │                                          │       │                   │
+│  -cli        │                                          │  ┌────┴────┐              │
+└──────┬───────┘                                          │  │         │              │
+       │ HTTPS + JWT                                      │  Kafka   PostgreSQL      │
+       └─────────────────────────────────────────────────▶│ Consumer  (Neon free)    │
+                    api.chatpulse.online                   │  Redis     Kafka         │
+                                                          │  (Upstash) (Confluent)   │
+                                                          └──────────────────────────┘
+```
+
+### CI/CD Pipeline
+
+On every push to `master`, GitHub Actions:
+
+1. **Builds** the Docker image using the multi-stage `backend/Dockerfile`
+2. **Pushes** to `ghcr.io/<user>/chatpulse-api:latest`
+3. **SSH into VPS** → pulls new image → restarts `api` + `kafka-consumer`
+
+### Required GitHub Secrets
+
+| Secret | Description |
+|--------|-------------|
+| `VPS_HOST` | VPS public IP address |
+| `VPS_USER` | SSH username (e.g. `ubuntu`, `admin`) |
+| `VPS_SSH_KEY` | Private SSH key (contents, not path) |
+| `GHCR_PAT` | GitHub PAT with `read:packages` scope |
+
+### DNS Records (Namecheap)
+
+| Type | Host | Value | Purpose |
+|------|------|-------|---------|
+| CNAME | `@` | `<vercel-url>` | Root domain → Vercel SPA |
+| A | `api` | `<vps-ip>` | API subdomain → VPS |
+
+### VPS Setup (one-time)
+
+```bash
+# Install Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker ubuntu
+
+# Create deploy directory
+sudo mkdir -p /opt/chatpulse
+sudo chown ubuntu:ubuntu /opt/chatpulse
+
+# Copy project files
+scp docker-compose.yml .env ubuntu@<vps-ip>:/opt/chatpulse/
+
+# Start services
+ssh ubuntu@<vps-ip>
+cd /opt/chatpulse
+docker compose up -d
+
+# SSL for api.chatpulse.online
+sudo apt install certbot python3-certbot-nginx -y
+sudo certbot --nginx -d api.chatpulse.online
+```
+
 ## Environment Variables
 
 | Variable | Default | Used By |

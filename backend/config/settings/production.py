@@ -5,11 +5,13 @@ DEBUG = False
 
 ALLOWED_HOSTS = config(
     'ALLOWED_HOSTS',
+    default='api.chatpulse.online,localhost',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
 
 CORS_ALLOWED_ORIGINS = config(
     'CORS_ALLOWED_ORIGINS',
+    default='https://chatpulse.online',
     cast=lambda v: [s.strip() for s in v.split(',')]
 )
 
@@ -26,6 +28,6 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 # ── Trusted origins for CSRF ─────────────────────────────────
 CSRF_TRUSTED_ORIGINS = config(
     'CSRF_TRUSTED_ORIGINS',
-    default='',
+    default='https://chatpulse.online',
     cast=lambda v: [s.strip() for s in v.split(',') if s.strip()]
 )
