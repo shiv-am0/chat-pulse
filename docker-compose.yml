@@ -30,7 +30,7 @@ services:
   api:
     build:
       context: ./backend
-    image: ghcr.io/${GHCR_USER:-your-gh-username}/chatpulse-api:latest
+    image: ghcr.io/${GHCR_USER:-shiv-am0}/chatpulse-api:latest
     container_name: chatpulse-api
     restart: unless-stopped
     expose:
@@ -60,7 +60,7 @@ services:
   kafka-consumer:
     build:
       context: ./backend
-    image: ghcr.io/${GHCR_USER:-your-gh-username}/chatpulse-api:latest
+    image: ghcr.io/${GHCR_USER:-shiv-am0}/chatpulse-api:latest
     container_name: chatpulse-kafka-consumer
     restart: unless-stopped
     command: python manage.py run_kafka_consumer
