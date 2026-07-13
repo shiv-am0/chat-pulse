@@ -38,14 +38,7 @@ services:
       - .env
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
-      DB_HOST: postgres
-      REDIS_URL: redis://redis:6379
-      KAFKA_BROKER: kafka:29092
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    depends_on: {}
     networks:
       - chatpulse-network
     healthcheck:
@@ -74,15 +67,10 @@ services:
       - .env
     environment:
       DJANGO_SETTINGS_MODULE: config.settings.production
-      DB_HOST: postgres
-      REDIS_URL: redis://redis:6379
-      KAFKA_BROKER: kafka:29092
     volumes:
       - ./deploy/aiven-ca.pem:/app/certs/ca.pem:ro
     depends_on:
       api:
-        condition: service_healthy
-      kafka:
         condition: service_healthy
     networks:
       - chatpulse-network
@@ -93,6 +81,7 @@ services:
 
   # ── PostgreSQL ──────────────────────────────────────
   postgres:
+    profiles: ["local"]
     image: postgres:15
     container_name: chatpulse-postgres
     restart: unless-stopped
@@ -118,6 +107,7 @@ services:
 
   # ── Redis ───────────────────────────────────────────
   redis:
+    profiles: ["local"]
     image: redis/redis-stack:latest
     container_name: chatpulse-redis
     restart: unless-stopped
@@ -140,6 +130,7 @@ services:
 
   # ── Zookeeper ───────────────────────────────────────
   zookeeper:
+    profiles: ["local"]
     image: confluentinc/cp-zookeeper:7.4.0
     container_name: chatpulse-zookeeper
     restart: unless-stopped
@@ -160,6 +151,7 @@ services:
 
   # ── Kafka ───────────────────────────────────────────
   kafka:
+    profiles: ["local"]
     image: confluentinc/cp-kafka:7.4.0
     container_name: chatpulse-kafka
     restart: unless-stopped
@@ -191,6 +183,7 @@ services:
 
   # ── Monitoring UIs ──────────────────────────────────
   kafka-ui:
+    profiles: ["local"]
     image: provectuslabs/kafka-ui:latest
     container_name: chatpulse-kafka-ui
     restart: unless-stopped
@@ -206,6 +199,7 @@ services:
       - chatpulse-network
 
   pgadmin:
+    profiles: ["local"]
     image: dpage/pgadmin4:latest
     container_name: chatpulse-pgadmin
     restart: unless-stopped
