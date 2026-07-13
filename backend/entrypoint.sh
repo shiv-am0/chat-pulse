@@ -1,6 +1,11 @@
 #!/bin/sh
 set -e
 
+# If a command is passed (e.g. kafka-consumer), run it directly
+if [ $# -gt 0 ]; then
+    exec "$@"
+fi
+
 python manage.py migrate --noinput
 
 exec gunicorn config.wsgi:application \
