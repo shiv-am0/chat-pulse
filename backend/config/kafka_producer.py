@@ -1,19 +1,18 @@
 import json
 import logging
 from confluent_kafka import Producer, KafkaException
-from django.conf import settings
+from config.kafka_config import build_kafka_config
 
 logger = logging.getLogger(__name__)
 
-_producer_config = {
-    'bootstrap.servers': settings.KAFKA_BROKER,
+_producer_config = build_kafka_config({
     'acks': 'all',
     'enable.idempotence': True,
     'max.in.flight.requests.per.connection': 5,
     'retries': 3,
     'retry.backoff.ms': 1000,
     'delivery.timeout.ms': 30000,
-}
+})
 
 _producer = None
 

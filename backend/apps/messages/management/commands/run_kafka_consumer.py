@@ -4,9 +4,9 @@ import signal
 import sys
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
-from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
+from config.kafka_config import build_kafka_config
 
 logger = logging.getLogger(__name__)
 
@@ -17,13 +17,12 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         self.stdout.write(self.style.SUCCESS('Starting Kafka consumer...'))
 
-        consumer_config = {
-            'bootstrap.servers': settings.KAFKA_BROKER,
+        consumer_config = build_kafka_config({
             'group.id': 'chat-consumer-group',
             'auto.offset.reset': 'earliest',
             'enable.auto.commit': False,
             'max.poll.interval.ms': 300000,
-        }
+        })
 
         consumer = Consumer(consumer_config)
         running = True

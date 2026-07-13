@@ -60,6 +60,7 @@ services:
           memory: 512M
     volumes:
       - staticfiles:/app/staticfiles
+      - ./deploy/aiven-ca.pem:/app/certs/ca.pem:ro
 
   # ── Kafka Consumer (separate process) ───────────────
   kafka-consumer:
@@ -76,6 +77,8 @@ services:
       DB_HOST: postgres
       REDIS_URL: redis://redis:6379
       KAFKA_BROKER: kafka:29092
+    volumes:
+      - ./deploy/aiven-ca.pem:/app/certs/ca.pem:ro
     depends_on:
       api:
         condition: service_healthy
