@@ -4,6 +4,7 @@ import signal
 import sys
 
 from confluent_kafka import Consumer, KafkaError, KafkaException
+from django.conf import settings
 from django.core.management.base import BaseCommand
 from django.utils.dateparse import parse_datetime
 from config.kafka_config import build_kafka_config
