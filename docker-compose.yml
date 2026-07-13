@@ -13,8 +13,8 @@ services:
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - staticfiles:/app/staticfiles:ro
-      # Mount Let's Encrypt certs from host (after certbot setup)
-      # - /etc/letsencrypt:/etc/letsencrypt:ro
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - certbot-webroot:/var/www/certbot
     depends_on:
       api:
         condition: service_healthy
@@ -223,6 +223,7 @@ volumes:
   kafka_data:
   pgadmin_data:
   staticfiles:
+  certbot-webroot:
 
 networks:
   chatpulse-network:
