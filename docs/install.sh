@@ -65,7 +65,43 @@ fi
 
 # ── Install ─────────────────────────────────────────────
 echo -e "${CYAN}⟳ Installing chatpulse-cli...${NC}"
-$PIP install -q chatpulse-cli 2>/dev/null || $PIP install chatpulse-cli
+
+install_ok=0
+
+if command -v pipx &>/dev/null; then
+    pipx install chatpulse-cli && install_ok=1
+fi
+
+if [ "$install_ok" -eq 0 ]; then
+    if $PIP install --user -q chatpulse-cli 2>/dev/null; then
+        install_ok=1
+    else
+        # Check if PEP 668 blocks system pip (without side-effect install)
+        pep668=0
+        $PIP install --dry-run -q chatpulse-cli 2>&1 \
+            | grep -q "externally-managed-environment" \
+            && pep668=1 || true
+        if [ "$pep668" -eq 1 ]; then
+            echo -e "${YELLOW}⚠ System pip restricted. Trying --break-system-packages...${NC}"
+            $PIP install --break-system-packages -q chatpulse-cli && install_ok=1
+        fi
+    fi
+fi
+
+if [ "$install_ok" -eq 0 ]; then
+    $PIP install -q chatpulse-cli && install_ok=1
+fi
+
+if [ "$install_ok" -eq 0 ]; then
+    echo ""
+    echo -e "${RED}✗ Installation failed.${NC}"
+    echo ""
+    echo "  Try one of these:"
+    echo "    pipx install chatpulse-cli"
+    echo "    python3 -m venv venv && venv/bin/pip install chatpulse-cli"
+    echo ""
+    exit 1
+fi
 
 echo ""
 echo -e "${GREEN}✓${NC} ${BOLD}ChatPulse CLI installed!${NC}"
