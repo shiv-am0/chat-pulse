@@ -1,5 +1,6 @@
 import typer
 from .client import get_client, reset_client
+from .config import get_api_url, set_api_url
 from .ui import console, print_success, print_error
 
 app = typer.Typer(help="Authentication commands")
@@ -36,6 +37,7 @@ def login(
     """Login and store JWT tokens."""
     try:
         data = get_client().login(username, password)
+        set_api_url(get_api_url())
         print_success(f"Logged in as [bold]{data['user']['username']}[/bold]")
     except Exception as e:
         print_error(str(e))
