@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChatPulse — Real-time messaging for the terminal</title>
+  <meta name="description" content="Real-time terminal-based chat platform with Kafka-powered messaging, JWT auth, and room-based conversations." />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    * { scroll-behavior: smooth; }
+    body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; }
+    code, pre, .font-mono { font-family: 'JetBrains Mono', 'Fira Code', monospace; }
+
+    .terminal-window {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 0 40px rgba(6, 182, 212, 0.08);
+    }
+    .terminal-header {
+      background: #1e293b;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid #334155;
+    }
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot.r { background: #ef4444; }
+    .dot.y { background: #eab308; }
+    .dot.g { background: #22c55e; }
+    .terminal-title {
+      margin-left: 8px;
+      font-size: 13px;
+      color: #64748b;
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .terminal-body {
+      padding: 20px 24px;
+      min-height: 280px;
+    }
+    .line {
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards;
+      animation-delay: var(--delay);
+      line-height: 1.8;
+      font-size: 14px;
+    }
+    .line .prompt { color: #22c55e; }
+    .line .cmd { color: #e2e8f0; }
+    .line .out { color: #64748b; }
+    .line .msg-time { color: #64748b; }
+    .line .msg-user { color: #06b6d4; }
+    .line .msg-text { color: #e2e8f0; }
+    @keyframes fadeIn {
+      to { opacity: 1; }
+    }
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    .cursor {
+      animation: blink 1s step-end infinite;
+      color: #06b6d4;
+    }
+
+    .feature-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 24px;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .feature-card:hover {
+      border-color: #06b6d4;
+      transform: translateY(-2px);
+    }
+
+    .endpoint-card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      transition: border-color 0.2s;
+    }
+    .endpoint-card:hover { border-color: #06b6d4; }
+    .endpoint-card .body { display: none; padding: 16px 20px; border-top: 1px solid #334155; }
+    .endpoint-card.open .body { display: block; }
+
+    .copy-btn {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #94a3b8;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .copy-btn:hover { background: #334155; color: #e2e8f0; }
+
+    .arch-box {
+      fill: #1e293b;
+      stroke: #334155;
+      rx: 6;
+    }
+    .arch-text { fill: #e2e8f0; font-size: 12px; }
+    .arch-arrow { stroke: #64748b; stroke-width: 1.5; fill: none; }
+
+    @media (max-width: 640px) {
+      .terminal-body { padding: 12px 16px; min-height: 200px; }
+      .line { font-size: 12px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Nav ────────────────────────────────────────────── -->
+  <nav class="sticky top-0 z-50 bg-slate-900/80 backdrop-blur border-b border-slate-800">
+    <div class="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href="#" class="text-lg font-bold text-cyan-400 tracking-tight">ChatPulse</a>
+      <div class="flex items-center gap-6 text-sm">
+        <a href="#install" class="text-slate-300 hover:text-white transition">Install</a>
+        <a href="#quickstart" class="text-slate-300 hover:text-white transition">Quick Start</a>
+        <a href="#docs" class="text-slate-300 hover:text-white transition">Docs</a>
+        <a href="https://github.com/shiv-am0/chat-pulse" target="_blank"
+           class="hidden sm:flex items-center gap-1.5 text-slate-300 hover:text-white transition">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          <span>GitHub</span>
+        </a>
+        <a href="https://api.chatpulse.online/api/health/" target="_blank"
+           class="text-cyan-400 hover:text-cyan-300 transition text-xs font-medium hidden sm:inline">API ↗</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ── Hero ────────────────────────────────────────────── -->
+  <section class="max-w-5xl mx-auto px-4 pt-20 pb-12 text-center">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-xs font-medium mb-6">
+      <span class="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse"></span>
+      API Status: Online
+    </div>
+    <h1 class="text-4xl sm:text-6xl font-bold tracking-tight leading-tight">
+      <span class="text-cyan-400">ChatPulse</span>
+    </h1>
+    <p class="text-xl sm:text-2xl text-slate-300 mt-3 font-light">
+      Real-time messaging for the terminal
+    </p>
+    <p class="text-slate-500 mt-2 max-w-lg mx-auto">
+      Terminal-native chat with Kafka-powered messaging, room-based conversations, and JWT authentication.
+    </p>
+
+    <div class="mt-8 max-w-xl mx-auto" id="install">
+      <div class="bg-slate-800 rounded-xl p-1 flex items-center border border-slate-700">
+        <code class="flex-1 px-4 py-3 text-sm text-slate-300 overflow-x-auto whitespace-nowrap font-mono">
+          curl -sSL https://chatpulse.online/install.sh | bash
+        </code>
+        <button onclick="copyInstall()" class="copy-btn mr-2 shrink-0" id="copyBtn">
+          Copy
+        </button>
+      </div>
+      <p class="text-xs text-slate-500 mt-2">
+        Windows users: use <code class="text-slate-400">pip install chatpulse-cli</code>.
+        For interactive chat, <a href="https://learn.microsoft.com/en-us/windows/wsl/install" target="_blank" class="text-cyan-400 hover:underline">WSL</a> is recommended.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Terminal Demo ───────────────────────────────────── -->
+  <section class="max-w-3xl mx-auto px-4 pb-20">
+    <div class="terminal-window">
+      <div class="terminal-header">
+        <span class="dot r"></span>
+        <span class="dot y"></span>
+        <span class="dot g"></span>
+        <span class="terminal-title">chatpulse</span>
+      </div>
+      <div class="terminal-body">
+        <div class="line" style="--delay: 0.2s;">
+          <span class="prompt">$</span>
+          <span class="cmd"> chatpulse auth register alice alice@example.com</span>
+        </div>
+        <div class="line" style="--delay: 0.7s;">
+          <span class="out">Password: ••••••••••••</span>
+        </div>
+        <div class="line" style="--delay: 1.2s;">
+          <span class="out" style="color: #22c55e;">✓ Registration successful.</span>
+        </div>
+        <div class="line" style="--delay: 1.8s;">
+          <span class="prompt">$</span>
+          <span class="cmd"> chatpulse rooms create general</span>
+        </div>
+        <div class="line" style="--delay: 2.3s;">
+          <span class="out" style="color: #22c55e;">✓ Room 'general' created and joined!</span>
+        </div>
+        <div class="line" style="--delay: 2.9s;">
+          <span class="prompt">$</span>
+          <span class="cmd"> chatpulse rooms list</span>
+        </div>
+        <div class="line" style="--delay: 3.4s;">
+          <span class="out">┌──────┬─────────┬─────────┬─────────┬────────┐</span>
+        </div>
+        <div class="line" style="--delay: 3.5s;">
+          <span class="out">│  ID  │ Name    │ Creator │ Members │ Joined │</span>
+        </div>
+        <div class="line" style="--delay: 3.6s;">
+          <span class="out">├──────┼─────────┼─────────┼─────────┼────────┤</span>
+        </div>
+        <div class="line" style="--delay: 3.7s;">
+          <span class="out">│  1   │ general │ alice   │ 1       │ (you)  │</span>
+        </div>
+        <div class="line" style="--delay: 3.8s;">
+          <span class="out">└──────┴─────────┴─────────┴─────────┴────────┘</span>
+        </div>
+        <div class="line" style="--delay: 4.4s;">
+          <span class="prompt">$</span>
+          <span class="cmd"> chatpulse chat 1</span>
+        </div>
+        <div class="line" style="--delay: 4.9s;">
+          <span class="out" style="color: #06b6d4;">ℹ Joined general (room 1)</span>
+        </div>
+        <div class="line" style="--delay: 5.0s;">
+          <span class="out" style="color: #06b6d4;">ℹ Type your message and press Enter to send.</span>
+        </div>
+        <div class="line" style="--delay: 5.1s;">
+          <span class="out">────────────────────────────────</span>
+        </div>
+        <div class="line" style="--delay: 5.3s;">
+          <span class="msg-time">10:30:01</span>
+          <span class="msg-user"> alice:</span>
+          <span class="msg-text"> hello world</span>
+        </div>
+        <div class="line" style="--delay: 5.7s;">
+          <span class="msg-time">10:30:05</span>
+          <span class="msg-user"> alice:</span>
+          <span class="msg-text"> anyone there?</span>
+        </div>
+        <div class="line" style="--delay: 6.2s;">
+          <span class="prompt">&gt;</span>
+          <span class="cmd"> <span class="cursor">_</span></span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Features ────────────────────────────────────────── -->
+  <section class="max-w-5xl mx-auto px-4 pb-20">
+    <h2 class="text-2xl font-bold text-center mb-10">Why ChatPulse?</h2>
+    <div class="grid sm:grid-cols-2 gap-4">
+      <div class="feature-card">
+        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M4 17V9a2 2 0 012-2h12a2 2 0 012 2v8a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M8 21h8"/></svg>
+        </div>
+        <h3 class="font-semibold mb-1">Terminal Native</h3>
+        <p class="text-sm text-slate-400">No browser, no GUI, no Electron. Just your shell and a fast, responsive TUI.</p>
+      </div>
+      <div class="feature-card">
+        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        </div>
+        <h3 class="font-semibold mb-1">Real-time via Kafka</h3>
+        <p class="text-sm text-slate-400">Messages flow through Apache Kafka with pub/sub broadcast — instant delivery, no polling overhead.</p>
+      </div>
+      <div class="feature-card">
+        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        </div>
+        <h3 class="font-semibold mb-1">Room-based Chat</h3>
+        <p class="text-sm text-slate-400">Create rooms, invite members, and manage conversations. Rooms auto-delete when the creator leaves.</p>
+      </div>
+      <div class="feature-card">
+        <div class="w-10 h-10 rounded-lg bg-cyan-500/10 flex items-center justify-center mb-3">
+          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+        </div>
+        <h3 class="font-semibold mb-1">JWT Authentication</h3>
+        <p class="text-sm text-slate-400">Secure token-based auth with auto-refresh. Tokens are isolated per terminal for multi-session safety.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Quick Start ─────────────────────────────────────── -->
+  <section class="max-w-3xl mx-auto px-4 pb-20" id="quickstart">
+    <h2 class="text-2xl font-bold text-center mb-10">Quick Start</h2>
+    <div class="space-y-6">
+      <div class="flex gap-4">
+        <span class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-sm">1</span>
+        <div>
+          <h3 class="font-semibold mb-1">Install the CLI</h3>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <code class="text-sm font-mono text-slate-200">curl -sSL https://chatpulse.online/install.sh | bash</code>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-4">
+        <span class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-sm">2</span>
+        <div>
+          <h3 class="font-semibold mb-1">Register an account</h3>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <code class="text-sm font-mono text-slate-200">chatpulse auth register yourname your@email.com</code>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-4">
+        <span class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-sm">3</span>
+        <div>
+          <h3 class="font-semibold mb-1">Login</h3>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <code class="text-sm font-mono text-slate-200">chatpulse auth login yourname</code>
+          </div>
+        </div>
+      </div>
+      <div class="flex gap-4">
+        <span class="w-8 h-8 rounded-full bg-cyan-500/20 text-cyan-400 font-bold flex items-center justify-center shrink-0 text-sm">4</span>
+        <div>
+          <h3 class="font-semibold mb-1">Create a room and start chatting</h3>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700 mb-2">
+            <code class="text-sm font-mono text-slate-200">chatpulse rooms create my-room</code>
+          </div>
+          <div class="bg-slate-800 rounded-lg p-3 border border-slate-700">
+            <code class="text-sm font-mono text-slate-200">chatpulse chat 1</code>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CLI Reference ───────────────────────────────────── -->
+  <section class="max-w-4xl mx-auto px-4 pb-20" id="docs">
+    <h2 class="text-2xl font-bold text-center mb-10">CLI Reference</h2>
+
+    <div class="mb-6">
+      <input type="text" id="cliSearch" placeholder="Search commands..." oninput="filterCLI()"
+             class="w-full bg-slate-800 border border-slate-700 rounded-lg px-4 py-3 text-sm text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500/50" />
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-sm" id="cliTable">
+        <thead>
+          <tr class="text-left text-slate-500 border-b border-slate-800">
+            <th class="pb-3 pr-4 font-medium">Command</th>
+            <th class="pb-3 pr-4 font-medium hidden sm:table-cell">Arguments</th>
+            <th class="pb-3 font-medium">Description</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-800">
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">auth register</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">username email</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Create a new account</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">auth login</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">username</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Login and store JWT tokens</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">auth logout</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">—</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Clear stored tokens</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">auth me</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">—</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Show current user profile</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">rooms list</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">—</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">List all available rooms</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">rooms create</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">name</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Create a room and auto-join</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">rooms show</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">room_id</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Show room details and members</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">rooms join</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">room_id</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Join a room</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">rooms leave</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">room_id</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Leave a room (creators delete it)</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">messages send</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">room_id content</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Send a message to a room</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">messages history</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">room_id [--limit] [--before-id]</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Show message history with pagination</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">chat</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">room_id</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Enter interactive chat mode</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">config show</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">—</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Show current configuration</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">config set-api-url</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">url</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Set persistent API URL override</td></tr>
+          <tr class="cli-row"><td class="py-2.5 pr-4"><code class="text-cyan-400 text-xs sm:text-sm">config reset</code></td><td class="py-2.5 pr-4 hidden sm:table-cell"><code class="text-slate-400 text-xs">—</code></td><td class="py-2.5 text-slate-300 text-xs sm:text-sm">Reset to default production URL</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ── API Reference ───────────────────────────────────── -->
+  <section class="max-w-4xl mx-auto px-4 pb-20">
+    <h2 class="text-2xl font-bold text-center mb-10">API Reference</h2>
+    <div class="space-y-3" id="apiEndpoints">
+
+      <div class="endpoint-card" onclick="toggleEndpoint(this)">
+        <div class="flex items-center gap-3 px-5 py-3.5">
+          <span class="text-xs font-bold px-2 py-0.5 rounded bg-green-500/20 text-green-400">POST</span>
+          <code class="text-sm font-mono text-slate-200">/api/auth/register/</code>
+          <span class="text-slate-500 text-xs ml-auto">Register a new user</span>
+          <svg class="w-4 h-4 text-slate-500 chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="body">
+          <pre class="text-xs text-slate-400 overflow-x-auto"><span class="text-slate-500"># Request</span>
+{ "username": "alice", "email": "alice@example.com", "password": "secret123", "password2": "secret123" }
+
+<span class="text-slate-500"># Response 201</span>
+{ "message": "Registration successful.", "user": { "id": 1, "username": "alice", "email": "alice@example.com", "is_online": false } }</pre>
+        </div>
+      </div>
+
+      <div class="endpoint-card" onclick="toggleEndpoint(this)">
+        <div class="flex items-center gap-3 px-5 py-3.5">
+          <span class="text-xs font-bold px-2 py-0.5 rounded bg-green-500/20 text-green-400">POST</span>
+          <code class="text-sm font-mono text-slate-200">/api/auth/login/</code>
+          <span class="text-slate-500 text-xs ml-auto">Authenticate and get JWT tokens</span>
+          <svg class="w-4 h-4 text-slate-500 chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="body">
+          <pre class="text-xs text-slate-400 overflow-x-auto"><span class="text-slate-500"># Request</span>
+{ "username": "alice", "password": "secret123" }
+
+<span class="text-slate-500"># Response 200</span>
+{ "access": "&lt;jwt-token&gt;", "refresh": "&lt;refresh-token&gt;", "user": { "id": 1, "username": "alice", "email": "alice@example.com", "is_online": true } }</pre>
+        </div>
+      </div>
+
+      <div class="endpoint-card" onclick="toggleEndpoint(this)">
+        <div class="flex items-center gap-3 px-5 py-3.5">
+          <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">GET</span>
+          <code class="text-sm font-mono text-slate-200">/api/rooms/</code>
+          <span class="text-slate-500 text-xs ml-auto">List all rooms</span>
+          <svg class="w-4 h-4 text-slate-500 chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="body">
+          <pre class="text-xs text-slate-400 overflow-x-auto"><span class="text-slate-500"># Response 200</span>
+[{ "id": 1, "name": "general", "creator": { "id": 1, "username": "alice" }, "member_count": 1, "is_member": true, "created_at": "..." }]</pre>
+        </div>
+      </div>
+
+      <div class="endpoint-card" onclick="toggleEndpoint(this)">
+        <div class="flex items-center gap-3 px-5 py-3.5">
+          <span class="text-xs font-bold px-2 py-0.5 rounded bg-green-500/20 text-green-400">POST</span>
+          <code class="text-sm font-mono text-slate-200">/api/messages/send/</code>
+          <span class="text-slate-500 text-xs ml-auto">Send a message to a room</span>
+          <svg class="w-4 h-4 text-slate-500 chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="body">
+          <pre class="text-xs text-slate-400 overflow-x-auto"><span class="text-slate-500"># Request</span>
+{ "room_id": 1, "content": "hello world" }
+
+<span class="text-slate-500"># Response 202</span>
+{ "status": "Message sent.", "message": { "room_id": 1, "sender_id": 1, "sender_username": "alice", "content": "hello world", "timestamp": "..." } }</pre>
+        </div>
+      </div>
+
+      <div class="endpoint-card" onclick="toggleEndpoint(this)">
+        <div class="flex items-center gap-3 px-5 py-3.5">
+          <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">GET</span>
+          <code class="text-sm font-mono text-slate-200">/api/messages/?room_id=1&amp;limit=50</code>
+          <span class="text-slate-500 text-xs ml-auto">Retrieve messages with cursor pagination</span>
+          <svg class="w-4 h-4 text-slate-500 chevron" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+        </div>
+        <div class="body">
+          <pre class="text-xs text-slate-400 overflow-x-auto"><span class="text-slate-500"># Response 200</span>
+{ "messages": [{ "id": 1, "room_id": 1, "sender": { "id": 1, "username": "alice" }, "content": "hello world", "timestamp": "..." }], "has_more": false }</pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ── Architecture ──────────────────────────────────── -->
+  <section class="max-w-4xl mx-auto px-4 pb-20">
+    <h2 class="text-2xl font-bold text-center mb-10">Architecture</h2>
+    <div class="bg-slate-800/50 border border-slate-700 rounded-xl p-6 sm:p-10 flex justify-center">
+      <svg viewBox="0 0 720 280" class="w-full max-w-2xl" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <path d="M0,0 L8,3 L0,6" fill="#64748b" />
+          </marker>
+        </defs>
+
+        <rect x="10" y="20" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="60" y="45" text-anchor="middle" fill="#e2e8f0" font-size="13" font-family="JetBrains Mono, monospace">CLI</text>
+        <text x="60" y="60" text-anchor="middle" fill="#64748b" font-size="10">Python/Typer</text>
+
+        <line x1="110" y1="45" x2="170" y2="45" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
+        <text x="140" y="38" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">HTTPS</text>
+
+        <rect x="170" y="20" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="220" y="45" text-anchor="middle" fill="#e2e8f0" font-size="13" font-family="JetBrains Mono, monospace">Nginx</text>
+        <text x="220" y="60" text-anchor="middle" fill="#64748b" font-size="10">Reverse Proxy</text>
+
+        <line x1="270" y1="45" x2="330" y2="45" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
+        <text x="300" y="38" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">proxy</text>
+
+        <rect x="330" y="20" width="100" height="50" rx="6" fill="#1e293b" stroke="#06b6d4" stroke-width="1.5" />
+        <text x="380" y="45" text-anchor="middle" fill="#e2e8f0" font-size="13" font-family="JetBrains Mono, monospace">Django</text>
+        <text x="380" y="60" text-anchor="middle" fill="#64748b" font-size="10">Gunicorn WSGI</text>
+
+        <rect x="330" y="100" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="380" y="125" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="JetBrains Mono, monospace">Kafka</text>
+        <text x="380" y="140" text-anchor="middle" fill="#64748b" font-size="10">Producer</text>
+
+        <line x1="430" y1="125" x2="490" y2="125" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
+        <text x="460" y="118" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">topic</text>
+
+        <rect x="490" y="20" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="540" y="45" text-anchor="middle" fill="#e2e8f0" font-size="13" font-family="JetBrains Mono, monospace">Aiven Kafka</text>
+        <text x="540" y="60" text-anchor="middle" fill="#64748b" font-size="10">Message Broker</text>
+
+        <line x1="490" y1="45" x2="430" y2="100" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)" />
+        <text x="445" y="78" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">SASL_SSL</text>
+
+        <rect x="490" y="100" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="540" y="125" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="JetBrains Mono, monospace">Kafka</text>
+        <text x="540" y="140" text-anchor="middle" fill="#64748b" font-size="10">Consumer</text>
+
+        <rect x="490" y="180" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="540" y="205" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="JetBrains Mono, monospace">PostgreSQL</text>
+        <text x="540" y="220" text-anchor="middle" fill="#64748b" font-size="10">Neon (Cloud)</text>
+
+        <line x1="540" y1="150" x2="540" y2="180" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)" />
+        <text x="555" y="170" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">persist</text>
+
+        <rect x="330" y="180" width="100" height="50" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1.5" />
+        <text x="380" y="205" text-anchor="middle" fill="#e2e8f0" font-size="12" font-family="JetBrains Mono, monospace">Redis</text>
+        <text x="380" y="220" text-anchor="middle" fill="#64748b" font-size="10">Upstash (Cloud)</text>
+
+        <line x1="430" y1="205" x2="490" y2="205" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)" />
+        <text x="460" y="198" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">Pub/Sub</text>
+
+        <line x1="380" y1="45" x2="380" y2="100" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)" />
+        <text x="365" y="78" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">produce</text>
+
+        <line x1="380" y1="150" x2="380" y2="180" stroke="#64748b" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)" />
+        <text x="365" y="170" text-anchor="middle" fill="#64748b" font-size="9" font-family="JetBrains Mono, monospace">cache</text>
+      </svg>
+    </div>
+  </section>
+
+  <!-- ── Footer ───────────────────────────────────────────── -->
+  <footer class="border-t border-slate-800 py-10">
+    <div class="max-w-5xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-slate-500">
+      <div>
+        <span class="text-cyan-400 font-semibold">ChatPulse</span>
+        <span class="mx-2">·</span>
+        Built with Python, Django, Kafka &amp; Redis
+      </div>
+      <div class="flex items-center gap-4">
+        <a href="https://github.com/shiv-am0/chat-pulse" target="_blank" class="hover:text-white transition">GitHub</a>
+        <a href="https://api.chatpulse.online/api/health/" target="_blank" class="hover:text-white transition">API Status</a>
+        <a href="#" class="hover:text-white transition">Back to top</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    function copyInstall() {
+      const text = "curl -sSL https://chatpulse.online/install.sh | bash";
+      navigator.clipboard.writeText(text);
+      const btn = document.getElementById('copyBtn');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy', 2000);
+    }
+
+    function toggleEndpoint(el) {
+      el.classList.toggle('open');
+    }
+
+    function filterCLI() {
+      const q = document.getElementById('cliSearch').value.toLowerCase();
+      document.querySelectorAll('.cli-row').forEach(row => {
+        row.style.display = row.textContent.toLowerCase().includes(q) ? '' : 'none';
+      });
+    }
+  </script>
+</body>
+</html>
