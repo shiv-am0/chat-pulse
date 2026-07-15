@@ -31,7 +31,7 @@ if [ -z "$PYTHON" ]; then
     echo "    https://python.org/downloads"
     echo ""
     echo "  Or install directly via pip once Python is available:"
-    echo "    pip install git+https://github.com/shiv-am0/chat-pulse.git#subdirectory=cli"
+    echo "    pip install chatpulse-cli"
     echo ""
     exit 1
 fi
@@ -66,25 +66,24 @@ fi
 # ── Install ─────────────────────────────────────────────
 echo -e "${CYAN}⟳ Installing chatpulse-cli...${NC}"
 
-PKG_URL="git+https://github.com/shiv-am0/chat-pulse.git#subdirectory=cli"
 install_ok=0
 
 if command -v pipx &>/dev/null; then
-    pipx install "$PKG_URL" && install_ok=1
+    pipx install chatpulse-cli && install_ok=1
 fi
 
 if [ "$install_ok" -eq 0 ]; then
-    INSTALL_OUTPUT=$($PIP install --user "$PKG_URL" 2>&1) || true
+    INSTALL_OUTPUT=$($PIP install --user chatpulse-cli 2>&1) || true
     if echo "$INSTALL_OUTPUT" | grep -q "Successfully installed"; then
         install_ok=1
     elif echo "$INSTALL_OUTPUT" | grep -q "externally-managed-environment"; then
         echo -e "${YELLOW}⚠ System pip restricted. Trying --break-system-packages...${NC}"
-        $PIP install --break-system-packages "$PKG_URL" && install_ok=1
+        $PIP install --break-system-packages chatpulse-cli && install_ok=1
     fi
 fi
 
 if [ "$install_ok" -eq 0 ]; then
-    $PIP install "$PKG_URL" && install_ok=1
+    $PIP install chatpulse-cli && install_ok=1
 fi
 
 if [ "$install_ok" -eq 0 ]; then
@@ -92,8 +91,8 @@ if [ "$install_ok" -eq 0 ]; then
     echo -e "${RED}✗ Installation failed.${NC}"
     echo ""
     echo "  Try one of these:"
-    echo "    pipx install $PKG_URL"
-    echo "    python3 -m venv venv && venv/bin/pip install $PKG_URL"
+    echo "    pipx install chatpulse-cli"
+    echo "    python3 -m venv venv && venv/bin/pip install chatpulse-cli"
     echo ""
     exit 1
 fi
