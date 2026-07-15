@@ -98,6 +98,31 @@ if [ "$install_ok" -eq 0 ]; then
 fi
 
 echo ""
+
+if ! command -v chatpulse &>/dev/null; then
+    USER_BASE=$($PYTHON -m site --user-base 2>/dev/null) || true
+    BIN_DIR="${USER_BASE:-$HOME/Library/Python/$RAW_VER}/bin"
+
+    # Determine shell rc file
+    case "${SHELL##*/}" in
+        zsh) RC="$HOME/.zshrc" ;;
+        bash) RC="$HOME/.bashrc" ;;
+        fish) RC="$HOME/.config/fish/config.fish" ;;
+        *) RC="~/.zshrc (or your shell's rc file)" ;;
+    esac
+
+    echo -e "${YELLOW}⚠ chatpulse installed but not in PATH.${NC}"
+    echo ""
+    echo "  Add the install directory to your PATH:"
+    echo ""
+    echo "    echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> $RC"
+    echo "    source $RC"
+    echo ""
+    echo "  Or run directly:"
+    echo "    $BIN_DIR/chatpulse --help"
+    echo ""
+fi
+
 echo -e "${GREEN}✓${NC} ${BOLD}ChatPulse CLI installed!${NC}"
 echo ""
 echo -e "  Run ${BOLD}chatpulse --help${NC} to get started."
