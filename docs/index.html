@@ -92,6 +92,11 @@
     .endpoint-card .body { display: none; padding: 16px 20px; border-top: 1px solid #334155; }
     .endpoint-card.open .body { display: block; }
 
+    .os-card summary::-webkit-details-marker { display: none; }
+    .os-card summary::marker { display: none; content: ""; }
+    .os-card[open] .chevron { transform: rotate(180deg); }
+    .os-card .chevron { transition: transform 0.2s; }
+
     .copy-btn {
       background: #1e293b;
       border: 1px solid #334155;
@@ -164,10 +169,65 @@
           Copy
         </button>
       </div>
-      <p class="text-xs text-slate-500 mt-2">
-        Windows users: use <code class="text-slate-400">pip install chatpulse-cli</code>.
-        For interactive chat, <a href="https://learn.microsoft.com/en-us/windows/wsl/install" target="_blank" class="text-cyan-400 hover:underline">WSL</a> is recommended.
-      </p>
+
+      <div class="mt-3 space-y-2 text-sm">
+
+        <details class="os-card bg-slate-800 rounded-xl border border-slate-700 overflow-hidden" open>
+          <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none text-sm">
+            <span class="text-xs font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-400">Linux</span>
+            <span class="text-xs text-slate-500">Ubuntu, PopOS, Fedora, Arch</span>
+            <svg class="w-4 h-4 text-slate-500 ml-auto chevron shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-4 pb-4 border-t border-slate-700 pt-3 space-y-3">
+            <p class="text-xs text-slate-400">Recommended — handles PEP 668 automatically:</p>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <code class="text-sm font-mono text-slate-200">curl -sSL https://chatpulse.online/install.sh | bash</code>
+            </div>
+            <p class="text-xs text-slate-400">Or install directly with pip:</p>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <code class="text-sm font-mono text-slate-200">pip install chatpulse-cli</code>
+            </div>
+          </div>
+        </details>
+
+        <details class="os-card bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none text-sm">
+            <span class="text-xs font-bold px-2 py-0.5 rounded bg-yellow-500/20 text-yellow-400">macOS</span>
+            <span class="text-xs text-slate-500">Intel &amp; Apple Silicon</span>
+            <svg class="w-4 h-4 text-slate-500 ml-auto chevron shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-4 pb-4 border-t border-slate-700 pt-3 space-y-3">
+            <p class="text-xs text-slate-400">Install:</p>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <code class="text-sm font-mono text-slate-200">curl -sSL https://chatpulse.online/install.sh | bash</code>
+            </div>
+            <p class="text-xs text-slate-400">If <code class="text-slate-300">chatpulse</code> is not found after install, add to PATH:</p>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <code class="text-sm font-mono text-slate-200 text-xs sm:text-sm">echo 'export PATH="$HOME/Library/Python/3.13/bin:$PATH"' &gt;&gt; ~/.zshrc &amp;&amp; source ~/.zshrc</code>
+            </div>
+          </div>
+        </details>
+
+        <details class="os-card bg-slate-800 rounded-xl border border-slate-700 overflow-hidden">
+          <summary class="flex items-center gap-3 px-4 py-3 cursor-pointer select-none text-sm">
+            <span class="text-xs font-bold px-2 py-0.5 rounded bg-blue-500/20 text-blue-400">Windows</span>
+            <span class="text-xs text-slate-500">PowerShell / CMD</span>
+            <svg class="w-4 h-4 text-slate-500 ml-auto chevron shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7"/></svg>
+          </summary>
+          <div class="px-4 pb-4 border-t border-slate-700 pt-3 space-y-3">
+            <p class="text-xs text-slate-400">Install with pip (run as admin if needed):</p>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <code class="text-sm font-mono text-slate-200">pip install chatpulse-cli</code>
+            </div>
+            <p class="text-xs text-slate-400">If <code class="text-slate-300">chatpulse</code> is not recognized, add to your PATH — search "Environment Variables" and append:</p>
+            <div class="bg-slate-900 rounded-lg p-3 border border-slate-700">
+              <code class="text-sm font-mono text-slate-200 text-xs sm:text-sm">%APPDATA%\Python\Python313\Scripts</code>
+            </div>
+            <p class="text-xs text-slate-400">For interactive chat (<code class="text-slate-300">chatpulse chat</code>), use <a href="https://learn.microsoft.com/en-us/windows/wsl/install" target="_blank" class="text-cyan-400 hover:underline">WSL</a>.</p>
+          </div>
+        </details>
+
+      </div>
     </div>
   </section>
 
