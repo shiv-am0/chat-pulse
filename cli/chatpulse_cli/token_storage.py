@@ -9,7 +9,7 @@ def _token_suffix() -> str:
     """Hash the current terminal device to isolate tokens per TTY."""
     try:
         tty = os.ttyname(0)
-    except OSError:
+    except (OSError, AttributeError):
         tty = "default"
     return hashlib.md5(tty.encode()).hexdigest()[:8]
 
@@ -27,7 +27,10 @@ def save_tokens(access: str, refresh: str):
     path = _token_path()
     with open(path, "w") as f:
         json.dump({"access": access, "refresh": refresh}, f)
-    os.chmod(path, 0o600)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
 
 
 def load_tokens() -> dict | None:
