@@ -3,7 +3,9 @@
   "builds": [
     { "src": "/index.html", "use": "@vercel/static" },
     { "src": "/install.sh", "use": "@vercel/static",
-      "config": { "contentType": "text/x-shellscript" } }
+      "config": { "contentType": "text/x-shellscript" } },
+    { "src": "/install.ps1", "use": "@vercel/static",
+      "config": { "contentType": "text/x-powershell" } }
   ],
   "routes": [
     { "src": "/", "dest": "/index.html" }

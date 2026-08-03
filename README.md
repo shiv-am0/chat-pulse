@@ -247,6 +247,16 @@ python manage.py run_kafka_consumer
 
 ### 4. CLI Setup
 
+Install the CLI globally (isolated via pipx — recommended):
+
+```bash
+curl -sSL https://chatpulse.online/install.sh | bash        # macOS / Linux
+# or Windows (PowerShell):
+# powershell -ExecutionPolicy Bypass -c "irm https://chatpulse.online/install.ps1 | iex"
+```
+
+For local development against this repo, install from source instead:
+
 ```bash
 cd cli
 python -m venv .venv

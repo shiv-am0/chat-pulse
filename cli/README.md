@@ -2,9 +2,27 @@
 
 Terminal-based client for [ChatPulse](https://chatpulse.online) — a real-time messaging platform powered by Kafka.
 
+## Install
+
+**macOS / Linux** (auto-installs pipx if missing, no system-package or PATH fiddling):
+
 ```bash
-pip install chatpulse-cli
+curl -sSL https://chatpulse.online/install.sh | bash
 ```
+
+**Windows** (PowerShell — auto-installs pipx if missing):
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://chatpulse.online/install.ps1 | iex"
+```
+
+**Any OS** (pipx required — see [Prerequisites](#prerequisites)):
+
+```bash
+pipx install chatpulse-cli
+```
+
+The CLI installs into an isolated pipx environment, so it never touches your system Python.
 
 ## Quick Start
 
@@ -33,3 +51,9 @@ chatpulse chat 1
 ## Requirements
 
 Python 3.10+
+
+## Prerequisites
+
+- **Python 3.10+** — install from <https://python.org/downloads> if missing.
+- **pipx** — the install scripts bootstrap it automatically (via your package manager, or into an isolated fallback environment; they never use `--break-system-packages`). To install it yourself: `brew install pipx` (macOS), `sudo apt install pipx` (Debian/Ubuntu), or `python3 -m pip install --user pipx`.
+- **Windows** — interactive `chatpulse chat` requires [WSL](https://learn.microsoft.com/windows/wsl/install); all other commands run natively in PowerShell.

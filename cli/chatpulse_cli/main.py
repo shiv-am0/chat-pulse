@@ -1,4 +1,6 @@
 import os
+from importlib.metadata import version, PackageNotFoundError
+
 import typer
 from . import auth, rooms, messages
 from .chat import run_chat
@@ -11,6 +13,11 @@ from .config import (
 )
 from .ui import console, print_success, print_error, print_info
 
+try:
+    __version__ = version("chatpulse-cli")
+except PackageNotFoundError:
+    __version__ = "0.0.0"
+
 app = typer.Typer(
     name="chatpulse",
     help="Terminal-based client for ChatPulse real-time chat",
@@ -21,6 +28,12 @@ app.add_typer(auth.app, name="auth", help="Authentication commands")
 app.add_typer(rooms.app, name="rooms", help="Room management commands")
 app.add_typer(messages.app, name="messages", help="Message commands")
 app.add_typer(config_app := typer.Typer(help="CLI configuration"), name="config")
+
+
+def _version_callback(show: bool):
+    if show:
+        console.print(f"[bold]chatpulse[/bold] {__version__}")
+        raise typer.Exit()
 
 
 @config_app.command("show")
@@ -73,6 +86,13 @@ def main_callback(
     ),
     verbose: bool = typer.Option(
         False, "--verbose", "-v", help="Enable verbose output"
+    ),
+    show_version: bool = typer.Option(
+        False,
+        "--version",
+        help="Show version and exit",
+        is_eager=True,
+        callback=_version_callback,
     ),
 ):
     if api_url:
