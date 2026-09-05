@@ -32,9 +32,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest]
     env:
-      PIPX_HOME: ${{ runner.temp }}/chatpulse-pipx/home
-      PIPX_BIN_DIR: ${{ runner.temp }}/chatpulse-pipx/bin
-      PIPX_MAN_DIR: ${{ runner.temp }}/chatpulse-pipx/man
+      PIPX_HOME: ${{ github.workspace }}/.chatpulse-pipx/home
+      PIPX_BIN_DIR: ${{ github.workspace }}/.chatpulse-pipx/bin
+      PIPX_MAN_DIR: ${{ github.workspace }}/.chatpulse-pipx/man
 
     steps:
       - uses: actions/checkout@v4
@@ -79,9 +79,9 @@ jobs:
       matrix:
         shell: [powershell, pwsh]
     env:
-      PIPX_HOME: ${{ runner.temp }}\chatpulse-pipx\home
-      PIPX_BIN_DIR: ${{ runner.temp }}\chatpulse-pipx\bin
-      PIPX_MAN_DIR: ${{ runner.temp }}\chatpulse-pipx\man
+      PIPX_HOME: ${{ github.workspace }}\.chatpulse-pipx\home
+      PIPX_BIN_DIR: ${{ github.workspace }}\.chatpulse-pipx\bin
+      PIPX_MAN_DIR: ${{ github.workspace }}\.chatpulse-pipx\man
 
     steps:
       - uses: actions/checkout@v4
@@ -91,11 +91,21 @@ jobs:
           python-version: "3.12"
 
       - name: Install pipx test dependency
-        shell: ${{ matrix.shell }}
+        shell: pwsh
         run: python -m pip install pipx
 
-      - name: Install, verify current PATH, and upgrade ChatPulse
-        shell: ${{ matrix.shell }}
+      - name: Install with Windows PowerShell
+        if: matrix.shell == 'powershell'
+        shell: powershell
+        run: |
+          & ./docs/install.ps1
+          Get-Command chatpulse -ErrorAction Stop
+          & ./docs/install.ps1
+          & (Join-Path $env:PIPX_BIN_DIR "chatpulse.exe") --version
+
+      - name: Install with PowerShell 7
+        if: matrix.shell == 'pwsh'
+        shell: pwsh
         run: |
           & ./docs/install.ps1
           Get-Command chatpulse -ErrorAction Stop
