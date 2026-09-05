@@ -79,7 +79,7 @@ POST /api/messages/send/   (client)
 
 | Technology | Version | Purpose |
 |---|---|---|
-| Python | 3.10+ | Core language |
+| Python | 3.12+ backend; 3.10+ CLI | Core language |
 | Django | 6.0.3 | Web framework |
 | Django REST Framework | 3.17.1 | REST API toolkit |
 | SimpleJWT | 5.5.1 | JWT authentication |
@@ -100,7 +100,7 @@ POST /api/messages/send/   (client)
 - **Room Management** — create, list, join, leave rooms with Redis-backed membership
 - **Auto-Delete** — room and all messages cascade-deleted when creator leaves
 - **Async Messaging** — messages go through Kafka; `202 ACCEPTED` response, consumer persists to DB
-- **Idempotent Consumer** — duplicate message protection via `get_or_create` on `kafka_offset`
+- **Replay-aware Consumer** — duplicate protection currently uses Kafka offset only; see `docs/engineering-risks.md` for the multi-partition limitation
 - **Cursor Pagination** — efficient message history with `before_id`
 - **Redis Caching** — room membership (`Set`), room info (`Hash`) with DB fallback
 - **Redis Pub/Sub** — real-time message broadcasting to subscribers
@@ -185,7 +185,7 @@ chatpulse/
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.12+ for the backend (the CLI supports Python 3.10+)
 - Docker and Docker Compose
 - Git
 
@@ -199,10 +199,11 @@ cd chatpulse
 ### 2. Start Infrastructure
 
 ```bash
-docker-compose up -d
+cp .env.example .env
+docker compose --profile local up -d postgres redis zookeeper kafka
 
 # Verify all containers are healthy
-docker-compose ps
+docker compose --profile local ps
 ```
 
 ### 3. Backend Setup
@@ -216,7 +217,8 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Configure `.env` (already provided — edit as needed):
+Configure the ignored `.env` copied from `.env.example`. Its service addresses are
+for a host-run backend with containerized infrastructure:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -250,9 +252,9 @@ python manage.py run_kafka_consumer
 Install the CLI globally (isolated via pipx — recommended):
 
 ```bash
-curl -sSL https://chatpulse.online/install.sh | bash        # macOS / Linux
+curl -fsSL https://chatpulse.online/install.sh | bash       # macOS / Linux
 # or Windows (PowerShell):
-# powershell -ExecutionPolicy Bypass -c "irm https://chatpulse.online/install.ps1 | iex"
+# irm https://chatpulse.online/install.ps1 | iex
 ```
 
 For local development against this repo, install from source instead:
@@ -341,7 +343,7 @@ Open a second terminal, register/login as a second user, join the same room, and
 
 | Flag | Env Var | Description |
 |---|---|---|
-| `--api-url` | `CHATPULSE_API_URL` | Override API base URL (default: `http://localhost:8000/api`) |
+| `--api-url` | `CHATPULSE_API_URL` | Override API base URL (default: `https://api.chatpulse.online/api`) |
 | `--verbose`, `-v` | — | Enable verbose output |
 
 ### `chatpulse auth`
@@ -480,7 +482,7 @@ The suffix is derived from the terminal device path (`/dev/pts/1`, etc.), meanin
 
 ### Why Kafka instead of writing directly to DB?
 
-Kafka decouples message ingestion from persistence. Django returns `202 ACCEPTED` immediately without waiting for DB writes. Messages are never lost even if PostgreSQL is temporarily unavailable. The consumer can batch, retry, and reprocess on restart.
+Kafka decouples message ingestion from persistence. Django returns `202 ACCEPTED` immediately without waiting for DB writes. In the current implementation, `202` means the record was accepted into the producer's local queue, not that Kafka acknowledged it; an asynchronous delivery failure is logged and can lose the message. The consumer can retry and reprocess records that Kafka has accepted.
 
 ### Why Redis for membership checks?
 
@@ -492,11 +494,11 @@ When the room creator leaves, the entire room is deleted. PostgreSQL cascades th
 
 ### Why manual Kafka offset commit?
 
-`enable.auto.commit=False` ensures the offset is only committed after the message is successfully saved to PostgreSQL and published to Redis. If the consumer crashes mid-processing, the message is re-processed on restart — guaranteed at-least-once delivery.
+`enable.auto.commit=False` means the offset is committed after the message is saved to PostgreSQL and published to Redis. A crash before commit can replay the record. This is at-least-once consumption for broker-accepted records, not an end-to-end exactly-once or lossless guarantee.
 
 ### Why `get_or_create` with `kafka_offset`?
 
-If the consumer crashes after saving to DB but before committing the offset, it re-processes the same message on restart. `get_or_create(kafka_offset=offset, ...)` with `defaults={...}` prevents duplicate messages in the database — the duplicate path only logs and skips.
+If the consumer crashes after saving to DB but before committing the offset, it re-processes the same message on restart. `get_or_create(kafka_offset=offset, ...)` prevents a duplicate only while an offset is globally unique. Kafka offsets are actually scoped to topic and partition, so this schema must be corrected before the topic uses multiple partitions; see `docs/engineering-risks.md`.
 
 ### Why `select.select` for CLI input instead of `input()`?
 
@@ -510,78 +512,40 @@ Each terminal window gets its own `~/.chatpulse/token-{tty_hash}` file based on 
 
 ## Deployment
 
+> **Security notice:** `deploy/.env.production` is currently tracked and contains
+> credential-like production values. Treat them as exposed and follow
+> [`docs/credential-remediation.md`](docs/credential-remediation.md) before the next
+> routine release. Never display or copy those values into logs or issues.
+
 ### Architecture
 
 ```
-User's Terminal                     Vercel (CDN)                   AWS EC2 (VPS)
-┌──────────────┐             ┌──────────────────┐         ┌──────────────────────────┐
-│  chatpulse   │────────────▶│  SPA Docs Site   │         │  Nginx (:80/443)         │
-│  CLI tool    │             │  chatpulse.online│         │       │                   │
-│              │             └──────────────────┘         │       ▼                   │
-│  pip install │                                          │  Gunicorn/Django :8000    │
-│  chatpulse   │                                          │       │                   │
-│  -cli        │                                          │  ┌────┴────┐              │
-└──────┬───────┘                                          │  │         │              │
-       │ HTTPS + JWT                                      │  Kafka   PostgreSQL      │
-       └─────────────────────────────────────────────────▶│ Consumer  (Neon free)    │
-                    api.chatpulse.online                   │  Redis     Kafka         │
-                                                          │  (Upstash) (Confluent)   │
-                                                          └──────────────────────────┘
+User terminal        Vercel                 Northflank Sandbox
+┌───────────┐   ┌────────────────┐    ┌─────────────────────────┐
+│chatpulse  │   │chatpulse.online│    │ Django/Gunicorn API     │
+│CLI        │   │docs/installers │    │ Kafka consumer          │
+└─────┬─────┘   └────────────────┘    └──────┬──────┬──────┬───┘
+      │ HTTPS + JWT                          │      │      │
+      └──────────────────────────────────────┘      │      │
+                               Northflank PostgreSQL│ Aiven Kafka
+                                                   │
+                                              Upstash Redis
 ```
 
-### CI/CD Pipeline
+The former EC2/VPS deployment is retired. GitHub Actions now runs backend checks and
+builds the Docker image without publishing or deploying it. The prepared replacement
+uses two Northflank services (API and consumer), a private Northflank PostgreSQL add-on,
+Aiven Kafka, and Upstash Redis. It has not been provisioned or externally verified yet.
 
-On every push to `master`, GitHub Actions:
-
-1. **Builds** the Docker image using the multi-stage `backend/Dockerfile`
-2. **Pushes** to `ghcr.io/<user>/chatpulse-api:latest`
-3. **SSH into VPS** → pulls new image → restarts `api` + `kafka-consumer`
-
-### Required GitHub Secrets
-
-| Secret | Description |
-|--------|-------------|
-| `VPS_HOST` | VPS public IP address |
-| `VPS_USER` | SSH username (e.g. `ubuntu`, `admin`) |
-| `VPS_SSH_KEY` | Private SSH key (contents, not path) |
-| `GHCR_PAT` | GitHub PAT with `read:packages` scope |
-
-### DNS Records (Namecheap)
-
-| Type | Host | Value | Purpose |
-|------|------|-------|---------|
-| CNAME | `@` | `<vercel-url>` | Root domain → Vercel SPA |
-| A | `api` | `<vps-ip>` | API subdomain → VPS |
-
-### VPS Setup (one-time)
-
-```bash
-# Install Docker
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker ubuntu
-
-# Create deploy directory
-sudo mkdir -p /opt/chatpulse
-sudo chown ubuntu:ubuntu /opt/chatpulse
-
-# Copy project files
-scp docker-compose.yml .env ubuntu@<vps-ip>:/opt/chatpulse/
-
-# Start services
-ssh ubuntu@<vps-ip>
-cd /opt/chatpulse
-docker compose up -d
-
-# SSL for api.chatpulse.online
-sudo apt install certbot python3-certbot-nginx -y
-sudo certbot --nginx -d api.chatpulse.online
-```
+Follow [`docs/free-tier-deployment.md`](docs/free-tier-deployment.md) for provider setup,
+secret names, DNS cutover, end-to-end checks, and rollback. Once Northflank continuous
+deployment is enabled, pushing `master` becomes production-impacting.
 
 ## Environment Variables
 
 | Variable | Default | Used By |
 |---|---|---|
-| `CHATPULSE_API_URL` | `http://localhost:8000/api` | CLI — API base URL |
+| `CHATPULSE_API_URL` | `https://api.chatpulse.online/api` | CLI — API base URL |
 | `CHATPULSE_POLL_INTERVAL` | `2` | CLI — polling interval in seconds |
 | `SECRET_KEY` | *(required)* | Backend — Django secret key |
 | `DEBUG` | `False` | Backend — debug mode |
@@ -592,3 +556,8 @@ sudo certbot --nginx -d api.chatpulse.online
 | `DB_PORT` | `5432` | Backend — PostgreSQL port |
 | `REDIS_URL` | `redis://localhost:6379` | Backend — Redis connection |
 | `KAFKA_BROKER` | `localhost:9092` | Backend — Kafka bootstrap |
+| `KAFKA_SECURITY_PROTOCOL` | `PLAINTEXT` | Backend — use `SASL_SSL` for hosted Kafka |
+| `KAFKA_SASL_MECHANISM` | `SCRAM-SHA-256` | Backend — Kafka SASL mechanism |
+| `KAFKA_SASL_USERNAME` | — | Backend — Kafka service user |
+| `KAFKA_SASL_PASSWORD` | — | Backend — Kafka service password |
+| `KAFKA_SSL_CA_LOCATION` | — | Backend — optional CA path; omit with a public CA |

@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 #
-# ChatPulse CLI installer
+# ChatPulse CLI installer for macOS and Linux
 #
-# Installs the `chatpulse` CLI into its own isolated environment via pipx
-# (never touching system packages). If pipx is missing it is installed safely.
+# Installs the `chatpulse` CLI into its own isolated environment via pipx.
 #
-#   curl -sSL https://chatpulse.online/install.sh | bash
+#   curl -fsSL https://chatpulse.online/install.sh | bash
 #
 set -euo pipefail
 
@@ -18,50 +17,41 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m'
 
-ok()   { echo -e "${GREEN}✓${NC} $*"; }
-info() { echo -e "${CYAN}→${NC} $*"; }
-warn() { echo -e "${YELLOW}⚠${NC} $*"; }
-die()  { echo -e "${RED}✗${NC} $*" >&2; exit 1; }
+ok()   { printf "%b\n" "${GREEN}✓${NC} $*"; }
+info() { printf "%b\n" "${CYAN}→${NC} $*"; }
+warn() { printf "%b\n" "${YELLOW}⚠${NC} $*"; }
+die()  { printf "%b\n" "${RED}✗${NC} $*" >&2; exit 1; }
 
-echo ""
-echo -e "${BOLD}${CYAN}  ┌─────────────────────────────────────────┐${NC}"
-echo -e "${BOLD}${CYAN}  │           ChatPulse CLI Install          │${NC}"
-echo -e "${BOLD}${CYAN}  └─────────────────────────────────────────┘${NC}"
-echo ""
+printf "\n"
+printf "%b\n" "${BOLD}${CYAN}  ┌─────────────────────────────────────────┐${NC}"
+printf "%b\n" "${BOLD}${CYAN}  │           ChatPulse CLI Install          │${NC}"
+printf "%b\n" "${BOLD}${CYAN}  └─────────────────────────────────────────┘${NC}"
+printf "\n"
 info "Prerequisites:"
 info "  • Python 3.10 or newer"
-info "  • pipx (auto-installed below if missing)"
-info "  • For Windows: Git Bash, or WSL for chat mode"
-echo ""
+info "  • pipx (installed below if missing)"
+printf "\n"
+
+if [ "${EUID:-$(id -u)}" -eq 0 ]; then
+    die "Do not run this installer as root. Run it from your normal user account."
+fi
 
 # ── 1. Detect OS ───────────────────────────────────────────
-UNAME="$(uname -s)"
-case "$UNAME" in
+case "$(uname -s)" in
     Darwin) OS="macos" ;;
-    Linux)
-        case "$(uname -r)" in
-            *[Mm]icrosoft*) OS="wsl" ;;
-            *[Mm]icrosoft-[Ww]sl2) OS="wsl" ;;
-            *) OS="linux" ;;
-        esac
-        ;;
-    MINGW*|MSYS*|CYGWIN*) OS="windows-gitbash" ;;
-    *) OS="unknown" ;;
+    Linux) OS="linux" ;;
+    *) die "This installer supports macOS and Linux. On Windows, use install.ps1." ;;
 esac
 
 # ── 2. Detect Python 3.10+ ─────────────────────────────────
 PYTHON=""
-for cmd in python3 python; do
-    if command -v "$cmd" &>/dev/null; then
-        VER="$("$cmd" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null || true)"
-        MAJOR="${VER%%.*}"
-        MINOR="${VER#*.}"
-        MINOR="${MINOR%%.*}"
-        if [ -n "$VER" ] && [ "$MAJOR" -ge 3 ] && { [ "$MAJOR" -gt 3 ] || [ "$MINOR" -ge 10 ]; }; then
-            PYTHON="$cmd"
-            PY_VER="$VER"
-            break
-        fi
+PY_VER=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 &&
+        "$candidate" -c 'import sys; raise SystemExit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+        PYTHON="$(command -v "$candidate")"
+        PY_VER="$("$PYTHON" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+        break
     fi
 done
 
@@ -70,107 +60,107 @@ if [ -z "$PYTHON" ]; then
 fi
 ok "Python $PY_VER found ($PYTHON)"
 
-# ── 3. Locate pipx (or bootstrap it) ───────────────────────
-PIPX_CMD=""
-if command -v pipx &>/dev/null; then
-    PIPX_CMD="pipx"
-else
-    for cand in "$HOME/.local/bin/pipx" "$HOME/.local/share/pipx-boot/bin/pipx"; do
-        if [ -x "$cand" ]; then
-            PIPX_CMD="$cand"
-            break
+# Store the executable and optional arguments separately so paths with spaces work.
+PIPX=()
+
+find_pipx() {
+    local resolved=""
+    if resolved="$(command -v pipx 2>/dev/null)" && [ -n "$resolved" ]; then
+        PIPX=("$resolved")
+        return 0
+    fi
+
+    if "$PYTHON" -m pipx --version >/dev/null 2>&1; then
+        PIPX=("$PYTHON" -m pipx)
+        return 0
+    fi
+
+    for candidate in "$HOME/.local/bin/pipx" "$HOME/.local/share/pipx-bootstrap/bin/pipx"; do
+        if [ -x "$candidate" ]; then
+            PIPX=("$candidate")
+            return 0
         fi
     done
-fi
 
-if [ -z "$PIPX_CMD" ]; then
-    info "pipx not found. Bootstrapping it safely..."
-    case "$OS" in
-        macos)
-            if command -v brew &>/dev/null; then
-                brew install pipx
-            else
-                "$PYTHON" -m pip install --user pipx || true
-            fi
-            ;;
-        linux|wsl)
-            if command -v apt-get &>/dev/null; then
-                sudo apt-get update -y && sudo apt-get install -y pipx
-            elif command -v dnf &>/dev/null; then
-                sudo dnf install -y pipx
-            elif command -v pacman &>/dev/null; then
-                sudo pacman -S --noconfirm pipx
-            else
-                "$PYTHON" -m pip install --user pipx || true
-            fi
-            ;;
-        *)
-            "$PYTHON" -m pip install --user pipx || true
-            ;;
-    esac
+    return 1
+}
 
-    if [ -x "$HOME/.local/bin/pipx" ]; then
-        PIPX_CMD="$HOME/.local/bin/pipx"
-    elif command -v pipx &>/dev/null; then
-        PIPX_CMD="pipx"
-    elif [ ! -x "$HOME/.local/share/pipx-boot/bin/pipx" ]; then
-        warn "pipx could not be installed via the package manager / pip --user."
-        info "Falling back to an isolated bootstrap environment..."
-        "$PYTHON" -m venv "$HOME/.local/share/pipx-boot"
-        "$HOME/.local/share/pipx-boot/bin/pip" install --upgrade pip pipx
-        PIPX_CMD="$HOME/.local/share/pipx-boot/bin/pipx"
-    else
-        PIPX_CMD="$HOME/.local/share/pipx-boot/bin/pipx"
+# ── 3. Locate pipx (or bootstrap it) ───────────────────────
+if ! find_pipx; then
+    info "pipx not found. Installing it for your user account..."
+
+    package_install_succeeded=false
+    if [ "$OS" = "macos" ] && command -v brew >/dev/null 2>&1; then
+        if brew install pipx; then
+            package_install_succeeded=true
+        fi
+    elif [ "$OS" = "linux" ] && command -v sudo >/dev/null 2>&1; then
+        if command -v apt-get >/dev/null 2>&1 && sudo apt-get update -y && sudo apt-get install -y pipx; then
+            package_install_succeeded=true
+        elif command -v dnf >/dev/null 2>&1 && sudo dnf install -y pipx; then
+            package_install_succeeded=true
+        elif command -v pacman >/dev/null 2>&1 && sudo pacman -S --noconfirm python-pipx; then
+            package_install_succeeded=true
+        fi
+    fi
+
+    if [ "$package_install_succeeded" != true ] && ! "$PYTHON" -m pip install --user pipx; then
+        warn "The package manager and user-level pip installation were unavailable."
+    fi
+
+    if ! find_pipx; then
+        info "Creating an isolated pipx bootstrap environment..."
+        PIPX_BOOTSTRAP="$HOME/.local/share/pipx-bootstrap"
+        "$PYTHON" -m venv "$PIPX_BOOTSTRAP"
+        "$PIPX_BOOTSTRAP/bin/python" -m pip install --upgrade pip pipx
+        PIPX=("$PIPX_BOOTSTRAP/bin/pipx")
     fi
 fi
 
-if [ -z "$PIPX_CMD" ] || [ ! -x "$PIPX_CMD" ]; then
-    die "pipx is required. Install it with: $PYTHON -m pip install --user pipx  (or 'brew install pipx' on macOS), then re-run this script."
+PIPX_DESCRIPTION="${PIPX[*]}"
+ok "Using pipx: $PIPX_DESCRIPTION"
+
+# ── 4. Persist and refresh the pipx application path ───────
+if ! ENSUREPATH_OUTPUT="$("${PIPX[@]}" ensurepath 2>&1)"; then
+    printf "%s\n" "$ENSUREPATH_OUTPUT" >&2
+    die "pipx could not update your shell PATH. Run '$PIPX_DESCRIPTION ensurepath' and retry."
 fi
 
-ok "Using pipx: $PIPX_CMD"
-
-# ── 4. Ensure pipx bin directory is on PATH ────────────────
-"$PIPX_CMD" ensurepath >/dev/null 2>&1 || true
-# Also make it available in the current shell without a restart.
-if [ -d "$HOME/.local/bin" ]; then
-    case ":$PATH:" in
-        *":$HOME/.local/bin:"*) ;;
-        *) export PATH="$HOME/.local/bin:$PATH" ;;
-    esac
+PIPX_APP_DIR="$("${PIPX[@]}" environment --value PIPX_BIN_DIR 2>/dev/null || true)"
+if [ -z "$PIPX_APP_DIR" ]; then
+    PIPX_APP_DIR="${PIPX_BIN_DIR:-$HOME/.local/bin}"
 fi
 
-# ── 5. Install / upgrade the CLI ────────────────────────────
-if command -v chatpulse &>/dev/null; then
-    info "chatpulse already installed. Upgrading to the latest version..."
-    "$PIPX_CMD" upgrade "$PACKAGE" || "$PIPX_CMD" install "$PACKAGE"
+case ":$PATH:" in
+    *":$PIPX_APP_DIR:"*) ;;
+    *) export PATH="$PIPX_APP_DIR:$PATH" ;;
+esac
+
+# ── 5. Install or upgrade the CLI ──────────────────────────
+if "${PIPX[@]}" list --short 2>/dev/null | grep -Eq "^${PACKAGE}([[:space:]]|$)"; then
+    info "ChatPulse is already installed. Upgrading it..."
+    "${PIPX[@]}" upgrade "$PACKAGE"
 else
     info "Installing $PACKAGE (this may take a minute)..."
-    "$PIPX_CMD" install "$PACKAGE"
+    "${PIPX[@]}" install "$PACKAGE"
 fi
 
-# ── 6. Verify ───────────────────────────────────────────────
-if ! command -v chatpulse &>/dev/null; then
-    warn "chatpulse is not on PATH yet."
-    info "Run the following, then open a new terminal:"
-    echo ""
-    echo "  $PIPX_CMD ensurepath"
-    echo ""
-    die "chatpulse not found on PATH."
+# ── 6. Verify using pipx's actual application directory ───
+CHATPULSE_BIN="$PIPX_APP_DIR/chatpulse"
+if [ ! -x "$CHATPULSE_BIN" ]; then
+    die "pipx completed, but the ChatPulse launcher was not found at $CHATPULSE_BIN."
 fi
 
-VERSION="$("$PIPX_CMD" list 2>/dev/null | grep -oE "$PACKAGE [0-9.]+" | head -1 | awk '{print $2}' || true)"
-[ -z "$VERSION" ] && VERSION="$(chatpulse --version 2>/dev/null | awk '{print $NF}' || true)"
+VERSION_OUTPUT="$("$CHATPULSE_BIN" --version 2>/dev/null || true)"
 
-echo ""
-ok "$BOLD ChatPulse CLI installed!${NC} ${VERSION:+(version $VERSION)}"
-echo ""
-echo -e "  Get started with:"
-echo ""
-echo -e "    ${CYAN}chatpulse --help${NC}           show all commands"
-echo -e "    ${CYAN}chatpulse auth register <username> <email>${NC}"
-echo -e "    ${CYAN}chatpulse auth login <username>${NC}"
-echo -e "    ${CYAN}chatpulse rooms create general${NC}"
-echo -e "    ${CYAN}chatpulse chat 1${NC}            interactive chat"
-echo ""
-info "On Windows, interactive chat mode requires WSL (Python cannot read the terminal natively)."
+printf "\n"
+ok "${BOLD}ChatPulse CLI installed!${NC}${VERSION_OUTPUT:+ ($VERSION_OUTPUT)}"
+printf "\n"
+printf "  Get started with:\n\n"
+printf "%b\n" "    ${CYAN}chatpulse --help${NC}           show all commands"
+printf "%b\n" "    ${CYAN}chatpulse auth register <username> <email>${NC}"
+printf "%b\n" "    ${CYAN}chatpulse auth login <username>${NC}"
+printf "%b\n" "    ${CYAN}chatpulse rooms create general${NC}"
+printf "%b\n" "    ${CYAN}chatpulse chat 1${NC}            interactive chat"
+printf "\n"
+info "The command works in this installer process. Open a new terminal before using it from your shell."

@@ -4,25 +4,26 @@ Terminal-based client for [ChatPulse](https://chatpulse.online) — a real-time 
 
 ## Install
 
-**macOS / Linux** (auto-installs pipx if missing, no system-package or PATH fiddling):
+**macOS / Linux** (installs pipx if missing and configures your shell PATH):
 
 ```bash
-curl -sSL https://chatpulse.online/install.sh | bash
+curl -fsSL https://chatpulse.online/install.sh | bash
 ```
 
 **Windows** (PowerShell — auto-installs pipx if missing):
 
 ```powershell
-powershell -ExecutionPolicy Bypass -c "irm https://chatpulse.online/install.ps1 | iex"
+irm https://chatpulse.online/install.ps1 | iex
 ```
 
 **Any OS** (pipx required — see [Prerequisites](#prerequisites)):
 
 ```bash
 pipx install chatpulse-cli
+pipx ensurepath
 ```
 
-The CLI installs into an isolated pipx environment, so it never touches your system Python.
+The CLI installs into an isolated pipx environment, so it does not add packages to your system Python environment. Open a new terminal after installation so your shell loads the persisted PATH change.
 
 ## Quick Start
 

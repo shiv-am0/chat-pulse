@@ -1,0 +1,103 @@
+name: Installer tests
+
+on:
+  pull_request:
+    paths:
+      - "docs/install.sh"
+      - "docs/install.ps1"
+      - "docs/index.html"
+      - "docs/vercel.json"
+      - "cli/**"
+      - ".github/workflows/installer-tests.yml"
+  push:
+    branches: [master]
+    paths:
+      - "docs/install.sh"
+      - "docs/install.ps1"
+      - "docs/index.html"
+      - "docs/vercel.json"
+      - "cli/**"
+      - ".github/workflows/installer-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unix:
+    name: ${{ matrix.os }} installer
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    env:
+      PIPX_HOME: ${{ runner.temp }}/chatpulse-pipx/home
+      PIPX_BIN_DIR: ${{ runner.temp }}/chatpulse-pipx/bin
+      PIPX_MAN_DIR: ${{ runner.temp }}/chatpulse-pipx/man
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pipx test dependency
+        run: python -m pip install pipx
+
+      - name: Check shell installer
+        if: runner.os == 'Linux'
+        run: shellcheck docs/install.sh
+
+      - name: Install and upgrade ChatPulse
+        run: |
+          bash docs/install.sh
+          bash docs/install.sh
+          "$PIPX_BIN_DIR/chatpulse" --version
+
+      - name: Check website installer references
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          page = Path("docs/index.html").read_text()
+          expected = (
+              "curl -fsSL https://chatpulse.online/install.sh | bash",
+              "irm https://chatpulse.online/install.ps1 | iex",
+          )
+          missing = [command for command in expected if command not in page]
+          if missing:
+              raise SystemExit(f"Missing installer commands: {missing}")
+          PY
+
+  windows:
+    name: Windows installer (${{ matrix.shell }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shell: [powershell, pwsh]
+    env:
+      PIPX_HOME: ${{ runner.temp }}\chatpulse-pipx\home
+      PIPX_BIN_DIR: ${{ runner.temp }}\chatpulse-pipx\bin
+      PIPX_MAN_DIR: ${{ runner.temp }}\chatpulse-pipx\man
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pipx test dependency
+        shell: ${{ matrix.shell }}
+        run: python -m pip install pipx
+
+      - name: Install, verify current PATH, and upgrade ChatPulse
+        shell: ${{ matrix.shell }}
+        run: |
+          & ./docs/install.ps1
+          Get-Command chatpulse -ErrorAction Stop
+          & ./docs/install.ps1
+          & (Join-Path $env:PIPX_BIN_DIR "chatpulse.exe") --version
