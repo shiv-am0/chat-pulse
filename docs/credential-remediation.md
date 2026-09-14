@@ -2,8 +2,9 @@
 
 ## Confirmed exposure
 
-`deploy/.env.production` is tracked at `HEAD` and appears in commits dating from
-2026-07-11. A value-safe inspection (names/classification only) confirmed:
+`deploy/.env.production` was removed from the current working tree on 2026-09-10 but
+appears in commits dating from 2026-07-11 until the coordinated history rewrite is
+completed. A value-safe inspection (names/classification only) confirmed:
 
 - a non-placeholder Django `SECRET_KEY`;
 - a non-placeholder PostgreSQL `DB_PASSWORD`;
@@ -38,8 +39,9 @@ Do not execute history rewriting or credential changes as an incidental code edi
    JWT validation; plan a forced re-login and verify token behavior.
 7. Review provider access/audit logs from 2026-07-11 onward for unexpected use. Preserve
    evidence according to the owner's incident-response policy.
-8. Remove `deploy/.env.production` from Git tracking while preserving the required local
-   VPS file. The repository `.gitignore` already ignores `.env.*` except `.env.example`.
+8. Confirm `deploy/.env.production` remains absent from Git tracking. Use the safe
+   `deploy/.env.example` only as a list of required keys; the repository `.gitignore`
+   ignores real `.env.*` files while allowing `.env.example` files.
 9. Inventory forks, clones, pull-request refs, Actions artifacts/caches, and mirrors.
    Coordinate a `git filter-repo` (or provider-supported sensitive-data removal) rewrite
    with all contributors, then force-update affected refs only with explicit approval.

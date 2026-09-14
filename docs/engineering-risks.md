@@ -1,14 +1,14 @@
 # Engineering risk register
 
-Assessment date: 2026-09-05. Severity is user/production impact; likelihood is based on
+Assessment date: 2026-09-10. Severity is user/production impact; likelihood is based on
 the current implementation, not observed production incident data.
 
 | Priority | Risk | Severity | Likelihood | Effort | Evidence and next action |
 |---|---|---:|---:|---:|---|
-| P0 | Production credentials are tracked in Git | Critical | High | Medium | `deploy/.env.production` exists in current Git and prior commits. Redacted inspection confirmed a non-placeholder Django secret, database password, and credential-bearing Redis URL. Rotate first, then untrack and perform coordinated history cleanup; follow `credential-remediation.md`. |
+| P0 | Production credentials remain in pre-cleanup Git history | Critical | High | Medium | `deploy/.env.production` has been removed from the working tree, but prior commits and published tags retain credential-like values until coordinated history cleanup is completed. Rotate/revoke every affected value first; follow `credential-remediation.md`. |
 | P0 | Message API returns `202` before Kafka acknowledges delivery | High | Medium | Medium | `produce_message()` enqueues then `poll(0)`; callback failure is log-only. Define the acceptance contract, wait for delivery or introduce a durable outbox, and test broker timeout/unavailability. |
 | P0 | Consumer deduplication uses Kafka offset without topic/partition | High | Medium | Medium | `Message.kafka_offset` is globally unique, but Kafka offsets are partition-scoped. Migrate to `(topic, partition, offset)` or a producer-generated stable message ID before using multiple partitions. |
-| P0 | Replacement hosting is not yet provisioned or externally verified | High | High | Medium | EC2 is terminated and the repository now has CI only. Provision the documented Northflank/Aiven/Upstash target, verify the full message path, and record the first rollback point. |
+| P0 | Hosted message path is only partially verified | High | High | Medium | The public API/TLS and PostgreSQL health check passed on 2026-09-10, but it does not exercise Redis, Kafka, or the consumer. Verify a uniquely identifiable message round trip and record the healthy API/consumer build commits. |
 | P1 | Redis errors can cause partial success and HTTP 500 | High | High | Medium | Room create/join/leave update PostgreSQL before Redis without a degradation policy; send authorization calls Redis before DB fallback. Keep PostgreSQL authoritative, use transactions for DB invariants, and make cache repair explicit. |
 | P1 | Poison Kafka payloads can retry indefinitely | High | Medium | Medium | Only invalid JSON is committed/dropped. Missing/type-invalid fields raise on each replay; there is no retry budget or dead-letter topic. Add schema validation, failure classification, metrics, and a DLQ policy. |
 | P1 | Baseline tests do not exercise real infrastructure | Medium | High | Medium | The 40 tests use SQLite and mocks for Redis/Kafka. Add PostgreSQL integration tests, then a Compose-based message-path smoke test. |

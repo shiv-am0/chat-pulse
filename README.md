@@ -512,10 +512,11 @@ Each terminal window gets its own `~/.chatpulse/token-{tty_hash}` file based on 
 
 ## Deployment
 
-> **Security notice:** `deploy/.env.production` is currently tracked and contains
-> credential-like production values. Treat them as exposed and follow
-> [`docs/credential-remediation.md`](docs/credential-remediation.md) before the next
-> routine release. Never display or copy those values into logs or issues.
+> **Security notice:** `deploy/.env.production` was removed after credential-like
+> production values were committed historically. Do not reuse values from an old clone;
+> follow [`docs/credential-remediation.md`](docs/credential-remediation.md) until provider
+> rotation and coordinated history cleanup are complete. Use the placeholder-only
+> `deploy/.env.example` as a key reference and keep real values in provider secret stores.
 
 ### Architecture
 
@@ -533,9 +534,12 @@ User terminal        Vercel                 Northflank Sandbox
 ```
 
 The former EC2/VPS deployment is retired. GitHub Actions now runs backend checks and
-builds the Docker image without publishing or deploying it. The prepared replacement
-uses two Northflank services (API and consumer), a private Northflank PostgreSQL add-on,
-Aiven Kafka, and Upstash Redis. It has not been provisioned or externally verified yet.
+builds the Docker image without publishing or deploying it. The live replacement uses
+Northflank for the API and PostgreSQL, with Aiven Kafka and Upstash Redis; the Kafka
+consumer is intended to run as a second Northflank service. On 2026-09-10, the public
+`https://api.chatpulse.online/api/health/` endpoint returned HTTP 200 and reported its
+database as healthy. That check verifies public API/TLS and PostgreSQL reachability only;
+it does not verify Redis, Kafka, the consumer, or end-to-end message delivery.
 
 Follow [`docs/free-tier-deployment.md`](docs/free-tier-deployment.md) for provider setup,
 secret names, DNS cutover, end-to-end checks, and rollback. Once Northflank continuous

@@ -11,9 +11,10 @@ approval.
 
 ## Active credential incident
 
-`deploy/.env.production` is tracked in current and historical Git commits. Redacted
-inspection confirms credential-like Django, database, and Redis values. Treat them as
-exposed, do not reuse them for the new stack, and follow
+`deploy/.env.production` has been removed from the current tree but remains in Git
+history until the coordinated rewrite is completed. Redacted inspection confirmed
+credential-like Django, database, and Redis values. Treat them as exposed, do not reuse
+them for the new stack, and follow
 [credential-remediation.md](credential-remediation.md). Never paste values into issues,
 chat, logs, commands, or commits.
 

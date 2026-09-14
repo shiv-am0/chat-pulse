@@ -76,12 +76,13 @@ flowchart LR
 ```
 
 The EC2/VPS deployment is retired. The GitHub workflow no longer publishes or deploys
-an image; Northflank combined services are the planned build/deploy owner. The API and
+an image; Northflank combined services are the build/deploy owner. The API and
 consumer use the same Dockerfile, but Northflank runs them as two services. The API
 entrypoint runs migrations before Gunicorn; the consumer command override bypasses
 migrations. A private Northflank PostgreSQL add-on is the system of record. Northflank
 terminates public TLS, so Nginx is not part of this target path.
 
-This target has been prepared but not provisioned or externally verified. See
-[free-tier-deployment.md](free-tier-deployment.md) and
-[deployment-runbook.md](deployment-runbook.md).
+The public API/TLS and PostgreSQL-backed health endpoint were externally verified on
+2026-09-10. Redis, Kafka, the consumer, and end-to-end message delivery still require
+separate verification; the health endpoint does not exercise them. See
+[free-tier-deployment.md](free-tier-deployment.md) and [deployment-runbook.md](deployment-runbook.md).

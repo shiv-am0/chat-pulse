@@ -182,11 +182,12 @@ failures.
   mistakes must return 4xx, not uncaught `ValueError`/invalid slicing errors.
 - Never log JWTs, passwords, SASL credentials, connection URLs containing secrets,
   or environment values. Use key names and redacted values in diagnostics.
-- `deploy/.env.production` is currently tracked and contains credential-like production
-  values. Never display or copy its values. Treat its Django, database, and embedded
-  Redis credentials as exposed; rotate them before removing the file and coordinating
-  an authorized Git-history cleanup. `.gitignore` is prepared to ignore it once it is
-  untracked. See `docs/credential-remediation.md`.
+- `deploy/.env.production` has been removed from the current tree, but credential-like
+  values remain in pre-cleanup history until the coordinated rewrite is completed.
+  Never recover, display, or reuse them. Rotate/revoke the affected Django, database,
+  Redis, and potentially Kafka credentials before history cleanup. Use
+  `deploy/.env.example` only for placeholder key names. See
+  `docs/credential-remediation.md`.
 - `deploy/aiven-ca.pem` is a tracked public CA certificate, not a private key. Do not
   replace it with client certificates or private keys.
 
