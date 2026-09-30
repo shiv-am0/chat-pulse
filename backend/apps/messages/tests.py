@@ -1,4 +1,8 @@
+from io import StringIO
 from unittest.mock import patch, MagicMock
+from django.conf import settings
+from django.core.management import call_command
+from django.core.management.base import CommandError
 from rest_framework import status
 from rest_framework.test import APITestCase, override_settings
 
@@ -185,6 +189,104 @@ class MessageHistoryTests(APITestCase):
             f"/api/messages/?room_id={self.room.id}"
         )
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+@override_settings(
+    BENCHMARK_MODE=True,
+    BENCHMARK_USER_PASSWORD="DisposableBenchmarkPassword123!",
+)
+class SeedBenchmarkDataTests(APITestCase):
+    def setUp(self):
+        self.database_name_patch = patch.dict(
+            settings.DATABASES["default"],
+            {"NAME": "chatpulse_benchmark"},
+        )
+        self.database_name_patch.start()
+
+    def tearDown(self):
+        self.database_name_patch.stop()
+
+    def test_seed_command_creates_expected_dataset(self):
+        output = StringIO()
+
+        call_command(
+            "seed_benchmark_data",
+            users=3,
+            rooms=2,
+            messages=10,
+            batch_size=4,
+            message_size=40,
+            prefix="bench_test_",
+            stdout=output,
+        )
+
+        users = User.objects.filter(username__startswith="bench_test_")
+        rooms = Room.objects.filter(name__startswith="bench_test_")
+        hot_room = rooms.get(name="bench_test_room_0001")
+
+        self.assertEqual(users.count(), 3)
+        self.assertEqual(rooms.count(), 2)
+        self.assertEqual(RoomMembership.objects.filter(room__in=rooms).count(), 6)
+        self.assertEqual(Message.objects.filter(room__in=rooms).count(), 10)
+        self.assertEqual(Message.objects.filter(room=hot_room).count(), 5)
+        self.assertTrue(users.get(username="bench_test_user_0001").check_password(
+            "DisposableBenchmarkPassword123!"
+        ))
+        self.assertIn(f"BENCHMARK_ROOM_ID={hot_room.id}", output.getvalue())
+
+    def test_seed_command_requires_reset_for_existing_prefix(self):
+        command_options = {
+            "users": 1,
+            "rooms": 1,
+            "messages": 1,
+            "prefix": "bench_repeat_",
+        }
+        call_command("seed_benchmark_data", **command_options)
+
+        with self.assertRaisesMessage(CommandError, "--reset"):
+            call_command("seed_benchmark_data", **command_options)
+
+    def test_reset_only_replaces_prefixed_rows(self):
+        unrelated = User.objects.create_user(
+            username="ordinary-user",
+            password="OrdinaryPassword123!",
+        )
+        call_command(
+            "seed_benchmark_data",
+            users=2,
+            rooms=1,
+            messages=4,
+            prefix="bench_reset_",
+        )
+
+        call_command(
+            "seed_benchmark_data",
+            users=1,
+            rooms=1,
+            messages=2,
+            prefix="bench_reset_",
+            reset=True,
+        )
+
+        self.assertTrue(User.objects.filter(pk=unrelated.pk).exists())
+        self.assertEqual(
+            User.objects.filter(username__startswith="bench_reset_").count(),
+            1,
+        )
+        self.assertEqual(
+            Message.objects.filter(room__name__startswith="bench_reset_").count(),
+            2,
+        )
+
+    @override_settings(BENCHMARK_MODE=False)
+    def test_seed_command_refuses_non_benchmark_mode(self):
+        with self.assertRaisesMessage(CommandError, "BENCHMARK_MODE"):
+            call_command(
+                "seed_benchmark_data",
+                users=1,
+                rooms=1,
+                messages=1,
+            )
 
 
 class KafkaConsumerTests(APITestCase):
