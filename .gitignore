@@ -30,6 +30,9 @@ env/
 # Docker
 docker-data/
 
+# Generated showcase media
+media/
+
 # Backend
 backend/staticfiles/
 backend/media/
