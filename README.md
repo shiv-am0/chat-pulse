@@ -2,6 +2,9 @@
 
 A scalable real-time chat platform with a Django REST API backend and a terminal-based CLI client. Messages flow through Kafka for durability, get persisted to PostgreSQL, and are broadcast via Redis Pub/Sub. The CLI uses non-blocking input with a background polling loop for real-time chat.
 
+API load-test setup, commands, metric definitions, and report instructions are in
+[benchmarks/README.md](benchmarks/README.md).
+
 ---
 
 ## Architecture

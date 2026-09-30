@@ -34,6 +34,10 @@ docker-data/
 backend/staticfiles/
 backend/media/
 
+# Benchmark output (generated locally)
+benchmarks/results/*
+!benchmarks/results/.gitkeep
+
 # CLI
 cli/*.egg-info/
 cli/dist/
